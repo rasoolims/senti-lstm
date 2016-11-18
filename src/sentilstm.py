@@ -17,8 +17,6 @@ class SentiLSTM:
         parser.add_option('--model', dest='model', help='Load/Save model file', metavar='FILE', default='model.model')
         parser.add_option('--epochs', type='int', dest='epochs', default=5)
         parser.add_option('--batch', type='int', dest='batchsize', default=128)
-        parser.add_option('--hidden', type='int', dest='hidden_units', default=200)
-        parser.add_option('--hidden2', type='int', dest='hidden2_units', default=0)
         parser.add_option('--lstmdims', type='int', dest='lstm_dims', default=200)
         parser.add_option('--hidden', type='int', dest='hidden_units', default=200)
         parser.add_option('--hidden2', type='int', dest='hidden2_units', default=0)
@@ -41,6 +39,7 @@ class SentiLSTM:
             self.rev_labels = list(labels)
             self.label_dict = {label:i for i,label in enumerate(self.rev_labels)}
             self.num_labels = len(self.rev_labels)
+            print 'loaded labels#:',self.num_labels
 
             to_save_params = []
             to_save_params.append(self.rev_labels)
