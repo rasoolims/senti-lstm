@@ -32,9 +32,8 @@ class SentiLSTM:
         if options.train_data != None:
             labels = set()
             tf = codecs.open(options.train_data, 'r')
-            csv_f = csv.reader(tf)
-            for row in csv_f:
-                labels.add(row[1])
+            for row in tf:
+                labels.add(row.split('\t')[1])
 
             self.rev_labels = list(labels)
             self.label_dict = {label:i for i,label in enumerate(self.rev_labels)}
