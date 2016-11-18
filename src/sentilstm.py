@@ -34,6 +34,7 @@ class SentiLSTM:
             tf = codecs.open(options.train_data, 'r')
             for row in tf:
                 labels.add(row.split('\t')[1])
+            tf.close()
 
             self.rev_labels = list(labels)
             self.label_dict = {label:i for i,label in enumerate(self.rev_labels)}
@@ -46,14 +47,15 @@ class SentiLSTM:
             to_save_params.append(self.num_labels)
             fp = codecs.open(options.embed, 'r')
             fp.readline()
-            self.embed = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in fp}
+            embed = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in fp}
             fp.close()
-            self.dim = len(self.embed.values()[0])
-            self.word_dict = {word: i+1 for i, word in enumerate(self.embed)}
-            self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict), self.dim))
+            self.dim = len(embed.values()[0])
+            self.word_dict = {word: i+1 for i, word in enumerate(embed)}
+            self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict)+1, self.dim))
             self.embed_lookup.set_updated(False)
             for word, i in self.word_dict.iteritems():
-                self.embed_lookup.init_row(i, self.embed[word])
+                assert len(embed[word])==self.dim
+                self.embed_lookup.init_row(i, embed[word])
             to_save_params.append(self.word_dict)
             to_save_params.append(self.dim)
             print 'Loaded word embeddings. Vector dimensions:', self.dim
