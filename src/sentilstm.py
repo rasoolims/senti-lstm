@@ -44,7 +44,7 @@ class SentiLSTM:
             to_save_params.append(self.rev_labels)
             to_save_params.append(self.label_dict)
             to_save_params.append(self.num_labels)
-            fp = codecs.open(options.embedding, 'r')
+            fp = codecs.open(options.embed, 'r')
             fp.readline()
             self.embed = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in fp}
             fp.close()
