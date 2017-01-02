@@ -24,36 +24,36 @@ class SentiLSTM:
         return parser.parse_args()
 
     def __init__(self, options):
-        self.model = Model()
-        self.batchsize = options.batchsize
-        self.trainer = AdamTrainer(self.model)
-        self.lstm_dims = options.lstm_dims
-        self.num_labels = 2
+        self.model = Model() # Dynet's model.
+        self.batchsize = options.batchsize # The number of training instances to be processed at a time.
+        self.trainer = AdamTrainer(self.model) # The updater (could be SGDTrainer as well).
+        self.lstm_dims = options.lstm_dims # The dimension of the LSTM output layer.
+        self.num_labels = 2 # Default number of labels.
 
         if options.train_data != None:
             labels = set()
             tf = codecs.open(os.path.abspath(options.train_data), 'r')
             for row in tf:
-                labels.add(row.strip().split('\t')[1])
+                labels.add(row.strip().split('\t')[1]) # The label is separated by tab at the end of line.
             tf.close()
 
             self.rev_labels = list(labels)
-            self.label_dict = {label:i for i,label in enumerate(self.rev_labels)}
-            self.num_labels = len(self.rev_labels)
+            self.label_dict = {label:i for i,label in enumerate(self.rev_labels)} # Lookup dictionary for label string values.
+            self.num_labels = len(self.rev_labels) # Now changing to the number of actual labels.
             print 'loaded labels#:',self.num_labels
 
-            to_save_params = []
+            to_save_params = [] # Bookkeeping the parameters to be saved.
             to_save_params.append(self.rev_labels)
             to_save_params.append(self.label_dict)
             to_save_params.append(self.num_labels)
-            fp = codecs.open(os.path.abspath(options.embed), 'r')
+            fp = codecs.open(os.path.abspath(options.embed), 'r') # Reading the embedding vectors from file.
             fp.readline()
             embed = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in fp}
             fp.close()
-            self.dim = len(embed.values()[0])
+            self.dim = len(embed.values()[0]) # Word embedding dimension.
             self.word_dict = {word: i+1 for i, word in enumerate(embed)}
             self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict)+1, self.dim))
-            self.embed_lookup.set_updated(False)
+            self.embed_lookup.set_updated(False) # This means that word embeddings cannot change over time.
             for word, i in self.word_dict.iteritems():
                 self.embed_lookup.init_row(i, embed[word])
             self.embed_lookup.init_row(0, [0]*self.dim)
@@ -61,16 +61,16 @@ class SentiLSTM:
             to_save_params.append(self.dim)
             print 'Loaded word embeddings. Vector dimensions:', self.dim
 
-            inp_dim = self.dim
+            inp_dim = self.dim # Assuming that the input is only the word; if we have more, we should change this.
             self.builders = [LSTMBuilder(1, inp_dim, self.lstm_dims, self.model),
-                             LSTMBuilder(1, inp_dim, self.lstm_dims, self.model)]
+                             LSTMBuilder(1, inp_dim, self.lstm_dims, self.model)] # Creating two lstms (forward and backward).
             self.hid_dim = options.hidden_units
             self.hid2_dim = options.hidden2_units
             self.hid_inp_dim = options.lstm_dims * 2
             self.H1 = self.model.add_parameters((self.hid_dim, self.hid_inp_dim))
             self.H2 = None if self.hid2_dim == 0 else self.model.add_parameters((self.hid2_dim, self.hid_dim))
             last_hid_dims = self.hid2_dim if self.hid2_dim > 0 else self.hid_dim
-            self.O = self.model.add_parameters((self.num_labels, last_hid_dims))
+            self.O = self.model.add_parameters((self.num_labels, last_hid_dims)) # Output layer.
             to_save_params.append(self.hid_dim)
             to_save_params.append(self.hid2_dim)
             to_save_params.append(self.hid_inp_dim)
@@ -131,11 +131,12 @@ class SentiLSTM:
             bw = [x.output() for x in b_init.add_inputs(reversed(word_embeddings))]
 
             input = concatenate([fw[-1],bw[-1]])
+            # I assumed that the activation function is ReLU; it is worth trying tanh as well.
             if H2:
                 r_t = O * rectify(dropout(H2 * (rectify(dropout(H1 * input,0.5))),0.5))
             else:
                 r_t = O * (rectify(dropout(H1 * input,0.5)))
-            err = pickneglogsoftmax(r_t, label)
+            err = pickneglogsoftmax(r_t, label) # Getting the softmax loss function value to backprop later.
             errors.append(err)
         return errors
 
@@ -157,7 +158,7 @@ class SentiLSTM:
                 self.trainer.update()
                 sz += len(instances)
                 i+= 1
-                if i%1 == 0:
+                if i%1 == 0: # You can change this to report (and save model if required) less frequently.
                     self.trainer.status()
                     print 'loss:',loss / sz,'time:',time.time()-start
                     start = time.time()
