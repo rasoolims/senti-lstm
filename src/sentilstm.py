@@ -28,7 +28,7 @@ class SentiLSTM:
     def __init__(self, options):
         self.model = Model() # Dynet's model.
         self.batchsize = options.batchsize # The number of training instances to be processed at a time.
-        self.trainer = AdamTrainer(self.model) # The updater (could be SGDTrainer as well).
+        self.trainer = AdamTrainer(self.model) # The updater (could be MomentumSGDTrainer or SimpleSGDTrainer as well).
         self.lstm_dims = options.lstm_dims # The dimension of the LSTM output layer.
         self.num_labels = 2 # Default number of labels.
         self.use_u_embedds = options.learnEmbed # Use updatable word embeddings (default false).
