@@ -2,7 +2,7 @@ from dynet import *
 import os, codecs, pickle,time
 from optparse import OptionParser
 import numpy as np
-
+import random
 
 class SentiLSTM:
     @staticmethod
@@ -21,6 +21,8 @@ class SentiLSTM:
         parser.add_option('--hidden', type='int', dest='hidden_units', default=200)
         parser.add_option('--hidden2', type='int', dest='hidden2_units', default=0)
         parser.add_option('--outdir', type='string', dest='output', default='')
+        parser.add_option("--learn_embed", action="store_true", dest="learnEmbed", default=True, help='Have additional word embedding input that is updatable.')
+        parser.add_option('--word_drop', type='float', dest='word_drop', default=0, help = 'Word dropout probability (good for fully supervised)')
         return parser.parse_args()
 
     def __init__(self, options):
@@ -29,13 +31,24 @@ class SentiLSTM:
         self.trainer = AdamTrainer(self.model) # The updater (could be SGDTrainer as well).
         self.lstm_dims = options.lstm_dims # The dimension of the LSTM output layer.
         self.num_labels = 2 # Default number of labels.
+        self.use_u_embedds = options.learnEmbed # Use updatable word embeddings (default false).
+        self.word_drop = options.word_drop
 
         if options.train_data != None:
             labels = set()
             tf = codecs.open(os.path.abspath(options.train_data), 'r')
+            seen_words = set() # If we need to learn embeddings, we have to build seen_words.
+
             for row in tf:
-                labels.add(row.strip().split('\t')[1]) # The label is separated by tab at the end of line.
+                spl = row.strip().split('\t')
+                if options.learnEmbed: # If we need to learn embeddings, we have to build seen_words.
+                    for f in spl[0].strip().split():
+                        if '|||' in f:
+                            seen_words.add(f[f.rfind('|||') + 4:])
+
+                labels.add(spl[1]) # The label is separated by tab at the end of line.
             tf.close()
+            if options.learnEmbed: print 'number of seen words', len(seen_words)
 
             self.rev_labels = list(labels)
             self.label_dict = {label:i for i,label in enumerate(self.rev_labels)} # Lookup dictionary for label string values.
@@ -53,15 +66,22 @@ class SentiLSTM:
             self.dim = len(embed.values()[0]) # Word embedding dimension.
             self.word_dict = {word: i+1 for i, word in enumerate(embed)}
             self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict)+1, self.dim))
+            self.embed_updatable_lookup = self.model.add_lookup_parameters((len(seen_words)+1, self.dim)) if options.learnEmbed else None # Updatable word embeddings.
+            self.word_updatable_dict = {word: i + 1 for i, word in enumerate(seen_words)} # 0th index represent the OOV.
             self.embed_lookup.set_updated(False) # This means that word embeddings cannot change over time.
+            if options.learnEmbed: self.embed_updatable_lookup.set_updated(True)
+
             for word, i in self.word_dict.iteritems():
                 self.embed_lookup.init_row(i, embed[word])
+                if self.word_updatable_dict.has_key(word):
+                    self.embed_updatable_lookup.init_row(self.word_updatable_dict[word], embed[word])
             self.embed_lookup.init_row(0, [0]*self.dim)
             to_save_params.append(self.word_dict)
+            to_save_params.append(self.word_updatable_dict)
             to_save_params.append(self.dim)
             print 'Loaded word embeddings. Vector dimensions:', self.dim
 
-            inp_dim = self.dim # Assuming that the input is only the word; if we have more, we should change this.
+            inp_dim = self.dim + (self.dim if options.learnEmbed else 0)# Assuming that the input is only the word; if we have more, we should change this.
             self.builders = [LSTMBuilder(1, inp_dim, self.lstm_dims, self.model),
                              LSTMBuilder(1, inp_dim, self.lstm_dims, self.model)] # Creating two lstms (forward and backward).
             self.hid_dim = options.hidden_units
@@ -89,12 +109,15 @@ class SentiLSTM:
         self.hid2_dim = saved_params.pop()
         self.hid_dim = saved_params.pop()
         self.dim = saved_params.pop()
+        self.word_updatable_dict = saved_params.pop()
         self.word_dict = saved_params.pop()
         self.num_labels = saved_params.pop()
         self.label_dict = saved_params.pop()
         self.rev_labels = saved_params.pop()
+        self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
         self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict), self.dim))
-        inp_dim = self.dim
+        self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
+        inp_dim = self.dim + (self.dim if self.use_u_embedds else 0)
         self.builders = [LSTMBuilder(1, inp_dim, self.lstm_dims, self.model),
                          LSTMBuilder(1, inp_dim, self.lstm_dims, self.model)]
         self.H1 = self.model.add_parameters((self.hid_dim, self.hid_inp_dim))
@@ -113,11 +136,19 @@ class SentiLSTM:
             label = self.label_dict[label]
             tokens = words.split()
             words = []
+            wordsu = [] # For adding updatable word indices.
             for w in tokens:
                 orig,trans = w,''
+                wordu = orig
                 if '|||' in w:
                     orig = w[:w.rfind('|||')]
                     trans = w[w.rfind('|||')+4:]
+                    wordu = trans
+
+                if self.word_updatable_dict.has_key(wordu) and random.uniform(0,1)>=self.word_drop: # If in-vocabulary and no need to drop it out.
+                    wordsu.append(self.word_updatable_dict[wordu])
+                else:
+                    wordsu.append(0)
 
                 if trans in self.word_dict:
                     words.append(self.word_dict[trans])
@@ -126,9 +157,11 @@ class SentiLSTM:
                 else:
                     words.append(0) # unknown translation
             word_embeddings = [self.embed_lookup[i] for i in words]
+            updatable_embeddings = [self.embed_updatable_lookup[wordsu[i]]  if self.use_u_embedds else None for i in xrange(len(wordsu))]
+            seq_input = [concatenate(filter(None, [word_embeddings[i],updatable_embeddings[i]])) for i in xrange(len(wordsu))]
             f_init, b_init = [b.initial_state() for b in self.builders]
-            fw = [x.output() for x in f_init.add_inputs(word_embeddings)]
-            bw = [x.output() for x in b_init.add_inputs(reversed(word_embeddings))]
+            fw = [x.output() for x in f_init.add_inputs(seq_input)]
+            bw = [x.output() for x in b_init.add_inputs(reversed(seq_input))]
 
             input = concatenate([fw[-1],bw[-1]])
             # I assumed that the activation function is ReLU; it is worth trying tanh as well.
@@ -223,15 +256,25 @@ class SentiLSTM:
 
         tokens = sentence.split()
         words = []
+        wordsu = []
         for w in tokens:
             if w in self.word_dict:
                 words.append(self.word_dict[w])
             else:
                 words.append(0)  # unknown translation
+
+            if w in self.word_updatable_dict:
+                wordsu.append(self.word_updatable_dict[w])
+            else:
+                wordsu.append(0)
         word_embeddings = [self.embed_lookup[i] for i in words]
+        updatable_embeddings = [self.embed_updatable_lookup[wordsu[i]] if self.use_u_embedds else None for i in
+                                xrange(len(wordsu))]
+        seq_input = [concatenate(filter(None, [word_embeddings[i], updatable_embeddings[i]])) for i in
+                     xrange(len(wordsu))]
         f_init, b_init = [b.initial_state() for b in self.builders]
-        fw = [x.output() for x in f_init.add_inputs(word_embeddings)]
-        bw = [x.output() for x in b_init.add_inputs(reversed(word_embeddings))]
+        fw = [x.output() for x in f_init.add_inputs(seq_input)]
+        bw = [x.output() for x in b_init.add_inputs(reversed(seq_input))]
 
         input = concatenate([fw[-1], bw[-1]])
         if H2:
@@ -240,7 +283,6 @@ class SentiLSTM:
             r_t = O * (rectify(H1 * input))
         label = np.argmax(r_t.npvalue())
         return self.rev_labels[label]
-
 
 if __name__ == '__main__':
     (options, args) = SentiLSTM.parse_options()
