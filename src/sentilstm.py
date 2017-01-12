@@ -261,7 +261,7 @@ class SentiLSTM:
             updatable_embeddings = [self.embed_updatable_lookup[wordsu[i]]  if self.use_u_embedds else None for i in xrange(len(wordsu))]
             tag_embeddings = [self.pos_embed_lookup[pos_tags[i]] if self.usepos else None for i in xrange(len(pos_tags))]
             seq_input = [concatenate(filter(None, [word_embeddings[i],updatable_embeddings[i],tag_embeddings[i],senti_embeddings[i]])) for i in xrange(len(wordsu))]
-            if not self.pooling: pool_input = [None]*len(wordsu)
+            if not self.pooling: pool_input = None
             else:
                 pool_input = seq_input[0]
                 for i in range(1,len(seq_input)):
@@ -399,8 +399,7 @@ class SentiLSTM:
         seq_input = [concatenate(
             filter(None, [word_embeddings[i], updatable_embeddings[i], tag_embeddings[i], senti_embeddings[i]])) for i
                      in xrange(len(wordsu))]
-        if not self.pooling:
-            pool_input = [None] * len(wordsu)
+        if not self.pooling:  pool_input = None
         else:
             pool_input = seq_input[0]
             for i in range(1, len(seq_input)):
