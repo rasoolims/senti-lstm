@@ -30,6 +30,8 @@ class SentiLSTM:
                           help='Have additional word embedding input that is updatable.')
         parser.add_option("--use_pos", action="store_false", dest="usepos", default=True,
                           help='Use pos tag information.')
+        parser.add_option("--pool", action="store_true", dest="usepool", default=False,
+                          help='Use average pool as input feature.')
         parser.add_option('--word_drop', type='float', dest='word_drop', default=0, help = 'Word dropout probability (good for fully supervised)')
         parser.add_option("--activation", type="string", dest="activation", default="tanh")
         parser.add_option("--trainer", type="string", dest="trainer", default="adam",help='adam,sgd,momentum,adadelta,adagrad')
@@ -51,6 +53,7 @@ class SentiLSTM:
         self.pos_dim = options.pos_dim
         if options.train_data != None:
             self.usepos = options.usepos
+            self.pooling = options.usepool
             labels = set()
             tf = codecs.open(os.path.abspath(options.train_data), 'r')
             seen_words = set() # If we need to learn embeddings, we have to build seen_words.
@@ -81,6 +84,7 @@ class SentiLSTM:
             print 'loaded labels#:',self.num_labels
 
             to_save_params = [] # Bookkeeping the parameters to be saved.
+            to_save_params.append(self.pooling)
             to_save_params.append(options.activation)
             to_save_params.append(self.pos_dim)
             to_save_params.append(self.usepos)
@@ -150,7 +154,7 @@ class SentiLSTM:
                              LSTMBuilder(1, inp_dim, self.lstm_dims, self.model)] # Creating two lstms (forward and backward).
             self.hid_dim = options.hidden_units
             self.hid2_dim = options.hidden2_units
-            self.hid_inp_dim = options.lstm_dims * 2
+            self.hid_inp_dim = options.lstm_dims * 2 + (inp_dim if self.pooling else 0)
             self.H1 = self.model.add_parameters((self.hid_dim, self.hid_inp_dim))
             self.H2 = None if self.hid2_dim == 0 else self.model.add_parameters((self.hid2_dim, self.hid_dim))
             last_hid_dims = self.hid2_dim if self.hid2_dim > 0 else self.hid_dim
@@ -187,6 +191,7 @@ class SentiLSTM:
         self.usepos = saved_params.pop()
         self.usepos = saved_params.pop()
         self.activation = self.activations[saved_params.pop()]
+        self.pooling = saved_params.pop()
         self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
         self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict), self.dim))
         self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
@@ -256,11 +261,17 @@ class SentiLSTM:
             updatable_embeddings = [self.embed_updatable_lookup[wordsu[i]]  if self.use_u_embedds else None for i in xrange(len(wordsu))]
             tag_embeddings = [self.pos_embed_lookup[pos_tags[i]] if self.usepos else None for i in xrange(len(pos_tags))]
             seq_input = [concatenate(filter(None, [word_embeddings[i],updatable_embeddings[i],tag_embeddings[i],senti_embeddings[i]])) for i in xrange(len(wordsu))]
+            if not self.pooling: pool_input = [None]*len(wordsu)
+            else:
+                pool_input = seq_input[0]
+                for i in range(1,len(seq_input)):
+                    pool_input += seq_input[i]
+                pool_input /= len(seq_input)
             f_init, b_init = [b.initial_state() for b in self.builders]
             fw = [x.output() for x in f_init.add_inputs(seq_input)]
             bw = [x.output() for x in b_init.add_inputs(reversed(seq_input))]
 
-            input = concatenate([fw[-1],bw[-1]])
+            input = concatenate(filter(None,[fw[-1],bw[-1],pool_input]))
             # I assumed that the activation function is ReLU; it is worth trying tanh as well.
             if H2:
                 r_t = O * self.activation(dropout(H2 * (self.activation(dropout(H1 * input,self.dropout))),self.dropout))
@@ -388,11 +399,18 @@ class SentiLSTM:
         seq_input = [concatenate(
             filter(None, [word_embeddings[i], updatable_embeddings[i], tag_embeddings[i], senti_embeddings[i]])) for i
                      in xrange(len(wordsu))]
+        if not self.pooling:
+            pool_input = [None] * len(wordsu)
+        else:
+            pool_input = seq_input[0]
+            for i in range(1, len(seq_input)):
+                pool_input += seq_input[i]
+            pool_input /= len(seq_input)
         f_init, b_init = [b.initial_state() for b in self.builders]
         fw = [x.output() for x in f_init.add_inputs(seq_input)]
         bw = [x.output() for x in b_init.add_inputs(reversed(seq_input))]
 
-        input = concatenate([fw[-1], bw[-1]])
+        input = concatenate(filter(None,[fw[-1], bw[-1],pool_input]))
         if H2:
             r_t = O * self.activation(H2 * (self.activation(H1 * input)))
         else:
