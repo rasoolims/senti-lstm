@@ -134,7 +134,7 @@ class SentiLSTM:
                     self.word2cluster[word] = cluster
                 self.cluster_dict = {cluster: i+1 for i, cluster in enumerate(clusters)}
                 self.cluster_lookup = self.model.add_lookup_parameters((len(self.cluster_dict) + 1, self.cluster_dim))
-                self.cluster_lookup.init_row(0, [0] * self.dim)
+                self.cluster_lookup.init_row(0, [0] * self.cluster_dim)
                 print 'num of clusters',len(self.cluster_dict),', num of words',len(self.word2cluster)
 
             self.use_sentiwn = False
