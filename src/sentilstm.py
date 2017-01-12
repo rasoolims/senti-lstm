@@ -32,12 +32,14 @@ class SentiLSTM:
                           help='Use pos tag information.')
         parser.add_option('--word_drop', type='float', dest='word_drop', default=0, help = 'Word dropout probability (good for fully supervised)')
         parser.add_option("--activation", type="string", dest="activation", default="tanh")
+        parser.add_option("--trainer", type="string", dest="trainer", default="adam",help='adam,sgd,momentum,adadelta,adagrad')
         return parser.parse_args()
 
     def __init__(self, options):
         self.model = Model() # Dynet's model.
         self.batchsize = options.batchsize # The number of training instances to be processed at a time.
-        self.trainer = AdamTrainer(self.model) # The updater (could be MomentumSGDTrainer or SimpleSGDTrainer as well).
+        trainers = {'adam':AdamTrainer, 'sgd':SimpleSGDTrainer, 'momentum':MomentumSGDTrainer,'adadelta':AdadeltaTrainer,'adagrad':AdagradTrainer}
+        self.trainer = trainers[options.trainer](self.model) # The updater (could be MomentumSGDTrainer or SimpleSGDTrainer as well).
         self.activations = {'tanh': tanh, 'sigmoid': logistic, 'relu': rectify,
                             'tanh3': (lambda x: tanh(cwise_multiply(cwise_multiply(x, x), x)))}
         self.dropout = options.dropout
