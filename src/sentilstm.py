@@ -89,6 +89,7 @@ class SentiLSTM:
             self.embed_dim = options.embed_dim
             self.embed_updatable_lookup = self.model.add_lookup_parameters(
                 (len(seen_words) + 1, self.embed_dim)) if options.learnEmbed else None  # Updatable word embeddings.
+            self.word_updatable_dict = {word: i + 1 for i, word in enumerate(seen_words)} # 0th index represent the OOV.
             self.dim = 0
             self.word_dict = None
             self.use_fixed_embed = False
@@ -114,7 +115,6 @@ class SentiLSTM:
             if self.usepos:
                 self.pos_embed_lookup = self.model.add_lookup_parameters((len(self.pos_dict), self.pos_dim))
                 self.pos_embed_lookup.set_updated(True)
-            self.word_updatable_dict = {word: i + 1 for i, word in enumerate(seen_words)} # 0th index represent the OOV.
             if options.learnEmbed: self.embed_updatable_lookup.set_updated(True)
 
             to_save_params.append(self.pos_dict)
