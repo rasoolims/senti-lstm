@@ -116,6 +116,7 @@ class SentiLSTM:
                     self.embed_lookup.init_row(i, embed[word])
 
             self.use_sentiwn = False
+            self.sentiwn_dict = None
             if options.sentiwn != None:
                 self.use_sentiwn = True
                 fp = codecs.open(os.path.abspath(options.sentiwn), 'r')
@@ -401,6 +402,7 @@ class SentiLSTM:
 
 if __name__ == '__main__':
     (options, args) = SentiLSTM.parse_options()
+    print options
     senti_lstm = SentiLSTM(options)
 
     if options.train_data!=None:
