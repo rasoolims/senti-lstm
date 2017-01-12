@@ -14,6 +14,7 @@ class SentiLSTM:
         parser.add_option('--output', dest='output_data', help='output data', metavar='FILE')
         parser.add_option('--params', dest='params', help='Parameters file', metavar='FILE', default='params.pickle')
         parser.add_option('--embed', dest='embed', help='Word embeddings for fixed embeddings', metavar='FILE')
+        parser.add_option('--senti', dest='sentiwn', help='Sentiwordnet file (word\tpos\tneg in each line)', metavar='FILE')
         parser.add_option('--init', dest='embed_init', help='Word embeddings initialization for updateable embeddings', metavar='FILE')
         parser.add_option('--model', dest='model', help='Load/Save model file', metavar='FILE', default='model.model')
         parser.add_option('--epochs', type='int', dest='epochs', default=5)
@@ -106,16 +107,25 @@ class SentiLSTM:
                 fp.close()
                 self.dim = len(embed.values()[0]) # Word embedding dimension.
                 self.word_dict = {word: i+1 for i, word in enumerate(embed)}
-                self.embed_lookup = self.model.add_lookup_parameters(
-                    (len(self.word_dict) + 1, self.dim)) if options.embed != None else None
+                self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict) + 1, self.dim))
                 self.embed_lookup.set_updated(False)  # This means that word embeddings cannot change over time.
                 self.embed_lookup.init_row(0, [0] * self.dim)
                 for word, i in self.word_dict.iteritems():
                     self.embed_lookup.init_row(i, embed[word])
 
+            self.use_sentiwn = False
+            if options.sentiwn != None:
+                self.use_sentiwn = True
+                fp = codecs.open(os.path.abspath(options.sentiwn), 'r')
+                entries = {line.split()[0]: [float(f) for f in line.strip().split()[1:]] for line in fp}
+                self.sentiwn_dict = {word: i + 1 for i, word in enumerate(entries)}
+                self.senti_embed_lookup = self.model.add_lookup_parameters((len(self.sentiwn_dict) + 1, 2))
+                self.senti_embed_lookup.init_row(0, [0,0])
+                for word, i in self.sentiwn_dict.iteritems():
+                    self.senti_embed_lookup.init_row(i, entries[word])
+                self.senti_embed_lookup.set_updated(False)
+
             self.pos_dict = {pos:i for i,pos in enumerate(seen_pos_tags)} if self.usepos else None
-
-
             if self.usepos:
                 self.pos_embed_lookup = self.model.add_lookup_parameters((len(self.pos_dict), self.pos_dim))
                 self.pos_embed_lookup.set_updated(True)
@@ -123,13 +133,15 @@ class SentiLSTM:
 
             to_save_params.append(self.pos_dict)
             to_save_params.append(self.word_dict)
+            to_save_params.append(self.sentiwn_dict)
+            to_save_params.append(self.use_sentiwn)
             to_save_params.append(self.word_updatable_dict)
             to_save_params.append(self.dim)
             to_save_params.append(self.embed_dim)
             to_save_params.append(self.use_fixed_embed)
             print 'Loaded word embeddings. Vector dimensions:', self.dim
 
-            inp_dim = self.dim + (self.embed_dim if options.learnEmbed else 0) + (self.pos_dim if self.usepos else 0)
+            inp_dim = self.dim + (self.embed_dim if options.learnEmbed else 0) + (self.pos_dim if self.usepos else 0) + (2 if self.use_sentiwn else 0)
             self.builders = [LSTMBuilder(1, inp_dim, self.lstm_dims, self.model),
                              LSTMBuilder(1, inp_dim, self.lstm_dims, self.model)] # Creating two lstms (forward and backward).
             self.hid_dim = options.hidden_units
@@ -160,6 +172,8 @@ class SentiLSTM:
         self.embed_dim = saved_params.pop()
         self.dim = saved_params.pop()
         self.word_updatable_dict = saved_params.pop()
+        self.use_sentiwn = saved_params.pop()
+        self.sentiwn_dict = saved_params.pop()
         self.word_dict = saved_params.pop()
         self.pos_dict = saved_params.pop()
         self.num_labels = saved_params.pop()
@@ -172,7 +186,7 @@ class SentiLSTM:
         self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
         self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict), self.dim))
         self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
-        inp_dim = self.dim + (self.embed_dim if self.use_u_embedds else 0) + (self.pos_dim if self.usepos else 0)
+        inp_dim = self.dim + (self.embed_dim if self.use_u_embedds else 0) + (self.pos_dim if self.usepos else 0) + (2 if self.use_sentiwn else 0)
         self.builders = [LSTMBuilder(1, inp_dim, self.lstm_dims, self.model),
                          LSTMBuilder(1, inp_dim, self.lstm_dims, self.model)]
         self.H1 = self.model.add_parameters((self.hid_dim, self.hid_inp_dim))
@@ -191,6 +205,7 @@ class SentiLSTM:
             label = self.label_dict[label]
             tokens = words.split()
             words = []
+            senti_word_ids = []
             wordsu = [] # For adding updatable word indices.
             pos_tags = []
             for w in tokens:
@@ -224,10 +239,19 @@ class SentiLSTM:
                         words.append(0) # unknown translation
                 else:
                     words.append(0)
+
+                if self.use_sentiwn:
+                    if orig.lower() in self.sentiwn_dict:
+                        senti_word_ids.append(self.sentiwn_dict[orig.lower()])
+                    else:
+                        senti_word_ids.append(0)
+                else:
+                    senti_word_ids.append(0)
             word_embeddings = [self.embed_lookup[i] if self.use_fixed_embed else None for i in words]
+            senti_embeddings = [self.senti_embed_lookup[i] if self.use_sentiwn else None for i in senti_word_ids]
             updatable_embeddings = [self.embed_updatable_lookup[wordsu[i]]  if self.use_u_embedds else None for i in xrange(len(wordsu))]
             tag_embeddings = [self.pos_embed_lookup[pos_tags[i]] if self.usepos else None for i in xrange(len(pos_tags))]
-            seq_input = [concatenate(filter(None, [word_embeddings[i],updatable_embeddings[i],tag_embeddings[i]])) for i in xrange(len(wordsu))]
+            seq_input = [concatenate(filter(None, [word_embeddings[i],updatable_embeddings[i],tag_embeddings[i],senti_embeddings[i]])) for i in xrange(len(wordsu))]
             f_init, b_init = [b.initial_state() for b in self.builders]
             fw = [x.output() for x in f_init.add_inputs(seq_input)]
             bw = [x.output() for x in b_init.add_inputs(reversed(seq_input))]
@@ -327,6 +351,7 @@ class SentiLSTM:
         words = []
         wordsu = []
         pos_tags = []
+        senti_word_ids = []
         for w in tokens:
             word = w if not self.usepos else w[:w.rfind('|||')]
             tag = w[w.rfind('|||')+3:] if self.usepos else None
@@ -343,11 +368,21 @@ class SentiLSTM:
                 wordsu.append(self.word_updatable_dict[word])
             else:
                 wordsu.append(0)
+
+            if self.use_sentiwn:
+                if word.lower() in self.sentiwn_dict:
+                    senti_word_ids.append(self.sentiwn_dict[word.lower()])
+                else:
+                    senti_word_ids.append(0)
+            else:
+                senti_word_ids.append(0)
         word_embeddings = [self.embed_lookup[i] if self.use_fixed_embed else None for i in words]
+        senti_embeddings = [self.senti_embed_lookup[i] if self.use_sentiwn else None for i in senti_word_ids]
         updatable_embeddings = [self.embed_updatable_lookup[wordsu[i]] if self.use_u_embedds else None for i in
                                 xrange(len(wordsu))]
         tag_embeddings = [self.pos_embed_lookup[pos_tags[i]] if self.usepos else None for i in xrange(len(pos_tags))]
-        seq_input = [concatenate(filter(None, [word_embeddings[i], updatable_embeddings[i], tag_embeddings[i]])) for i
+        seq_input = [concatenate(
+            filter(None, [word_embeddings[i], updatable_embeddings[i], tag_embeddings[i], senti_embeddings[i]])) for i
                      in xrange(len(wordsu))]
         f_init, b_init = [b.initial_state() for b in self.builders]
         fw = [x.output() for x in f_init.add_inputs(seq_input)]
