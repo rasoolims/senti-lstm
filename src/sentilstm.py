@@ -197,6 +197,7 @@ class SentiLSTM:
                     wordu = trans
                     pos_tags.append(self.pos_dict[pos]) if self.usepos else pos_tags.append(0)
                 else:
+                    pos_tags.append(0)
                     wordu = w
 
                 if self.word_updatable_dict.has_key(wordu) and random.uniform(0,1)>=self.word_drop: # If in-vocabulary and no need to drop it out.
