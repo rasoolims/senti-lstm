@@ -63,6 +63,8 @@ class SentiLSTM:
                                 assert f.count('|||') == 2
                                 seen_words.add(f[f.find('|||') + 3:f.rfind('|||')])
                                 seen_pos_tags.add(f[f.rfind('|||') + 3:])
+                        else:
+                            seen_words.add(f)
 
                 labels.add(spl[1]) # The label is separated by tab at the end of line.
             tf.close()
@@ -194,6 +196,8 @@ class SentiLSTM:
                         pos = w[w.rfind('|||')+3:]
                     wordu = trans
                     pos_tags.append(self.pos_dict[pos]) if self.usepos else pos_tags.append(0)
+                else:
+                    wordu = w
 
                 if self.word_updatable_dict.has_key(wordu) and random.uniform(0,1)>=self.word_drop: # If in-vocabulary and no need to drop it out.
                     wordsu.append(self.word_updatable_dict[wordu])
