@@ -124,6 +124,7 @@ class SentiLSTM:
                 for word, i in self.sentiwn_dict.iteritems():
                     self.senti_embed_lookup.init_row(i, entries[word])
                 self.senti_embed_lookup.set_updated(False)
+                print 'loaded',len(entries),'sentiwordnet entries.'
 
             self.pos_dict = {pos:i for i,pos in enumerate(seen_pos_tags)} if self.usepos else None
             if self.usepos:
