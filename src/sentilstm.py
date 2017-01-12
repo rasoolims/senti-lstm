@@ -28,6 +28,8 @@ class SentiLSTM:
                           help='Have additional word embedding input that is updatable.')
         parser.add_option("--use_pos", action="store_false", dest="usepos", default=True,
                           help='Use pos tag information.')
+        parser.add_option("--init", action="store_true", dest="init_embed", default=False,
+                          help='Initialize updateable embeddings with embedding file.')
         parser.add_option('--word_drop', type='float', dest='word_drop', default=0, help = 'Word dropout probability (good for fully supervised)')
         parser.add_option("--activation", type="string", dest="activation", default="tanh")
         return parser.parse_args()
@@ -43,6 +45,7 @@ class SentiLSTM:
         self.lstm_dims = options.lstm_dims # The dimension of the LSTM output layer.
         self.num_labels = 2 # Default number of labels.
         self.use_u_embedds = options.learnEmbed # Use updatable word embeddings (default false).
+        self.init_updatable = options.init_embed # Initialize updatable embedding files.
         self.word_drop = options.word_drop
         self.pos_dim = options.pos_dim
         if options.train_data != None:
@@ -83,6 +86,9 @@ class SentiLSTM:
             to_save_params.append(self.rev_labels)
             to_save_params.append(self.label_dict)
             to_save_params.append(self.num_labels)
+            self.embed_dim = options.embed_dim
+            self.embed_updatable_lookup = self.model.add_lookup_parameters(
+                (len(seen_words) + 1, self.embed_dim)) if options.learnEmbed else None  # Updatable word embeddings.
             self.dim = 0
             self.word_dict = None
             self.use_fixed_embed = False
@@ -100,11 +106,11 @@ class SentiLSTM:
                 self.embed_lookup.init_row(0, [0] * self.dim)
                 for word, i in self.word_dict.iteritems():
                     self.embed_lookup.init_row(i, embed[word])
-            self.embed_dim = options.embed_dim
+                    if self.word_updatable_dict.has_key(word) and self.embed_dim==self.dim and self.init_updatable:
+                        self.embed_updatable_lookup.init_row(self.word_updatable_dict[word], embed[word])
             self.pos_dict = {pos:i for i,pos in enumerate(seen_pos_tags)} if self.usepos else None
 
-            self.embed_updatable_lookup = self.model.add_lookup_parameters(
-                (len(seen_words) + 1, self.embed_dim)) if options.learnEmbed else None  # Updatable word embeddings.
+
             if self.usepos:
                 self.pos_embed_lookup = self.model.add_lookup_parameters((len(self.pos_dict), self.pos_dim))
                 self.pos_embed_lookup.set_updated(True)
