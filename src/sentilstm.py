@@ -44,7 +44,6 @@ class SentiLSTM:
         self.lstm_dims = options.lstm_dims # The dimension of the LSTM output layer.
         self.num_labels = 2 # Default number of labels.
         self.use_u_embedds = options.learnEmbed # Use updatable word embeddings (default false).
-        self.init_updatable = options.init_embed # Initialize updatable embedding files.
         self.word_drop = options.word_drop
         self.pos_dim = options.pos_dim
         if options.train_data != None:
