@@ -13,7 +13,8 @@ class SentiLSTM:
         parser.add_option('--input', dest='input_data', help='input data', metavar='FILE')
         parser.add_option('--output', dest='output_data', help='output data', metavar='FILE')
         parser.add_option('--params', dest='params', help='Parameters file', metavar='FILE', default='params.pickle')
-        parser.add_option('--embed', dest='embed', help='Word embeddings', metavar='FILE')
+        parser.add_option('--embed', dest='embed', help='Word embeddings for fixed embeddings', metavar='FILE')
+        parser.add_option('--init', dest='embed_init', help='Word embeddings initialization for updateable embeddings', metavar='FILE')
         parser.add_option('--model', dest='model', help='Load/Save model file', metavar='FILE', default='model.model')
         parser.add_option('--epochs', type='int', dest='epochs', default=5)
         parser.add_option('--batch', type='int', dest='batchsize', default=128)
@@ -28,8 +29,6 @@ class SentiLSTM:
                           help='Have additional word embedding input that is updatable.')
         parser.add_option("--use_pos", action="store_false", dest="usepos", default=True,
                           help='Use pos tag information.')
-        parser.add_option("--init", action="store_true", dest="init_embed", default=False,
-                          help='Initialize updateable embeddings with embedding file.')
         parser.add_option('--word_drop', type='float', dest='word_drop', default=0, help = 'Word dropout probability (good for fully supervised)')
         parser.add_option("--activation", type="string", dest="activation", default="tanh")
         return parser.parse_args()
@@ -90,6 +89,13 @@ class SentiLSTM:
             self.embed_updatable_lookup = self.model.add_lookup_parameters(
                 (len(seen_words) + 1, self.embed_dim)) if options.learnEmbed else None  # Updatable word embeddings.
             self.word_updatable_dict = {word: i + 1 for i, word in enumerate(seen_words)} # 0th index represent the OOV.
+            if options.embed_init!=None:
+                fp = codecs.open(os.path.abspath(options.embed_init), 'r')
+                embed = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in fp}
+                self.embed_dim = len(embed.values()[0])
+                for word in embed.keys():
+                    if self.word_updatable_dict.has_key(word):
+                        self.embed_updatable_lookup.init_row(self.word_updatable_dict[word], embed[word])
             self.dim = 0
             self.word_dict = None
             self.use_fixed_embed = False
@@ -107,8 +113,7 @@ class SentiLSTM:
                 self.embed_lookup.init_row(0, [0] * self.dim)
                 for word, i in self.word_dict.iteritems():
                     self.embed_lookup.init_row(i, embed[word])
-                    if self.word_updatable_dict.has_key(word) and self.embed_dim==self.dim and self.init_updatable:
-                        self.embed_updatable_lookup.init_row(self.word_updatable_dict[word], embed[word])
+
             self.pos_dict = {pos:i for i,pos in enumerate(seen_pos_tags)} if self.usepos else None
 
 
