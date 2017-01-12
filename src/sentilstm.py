@@ -22,18 +22,24 @@ class SentiLSTM:
         parser.add_option('--embed_dim', type='int', dest='embed_dim', help='learnable word embedding dimension', default=100)
         parser.add_option('--hidden2', type='int', dest='hidden2_units', default=0)
         parser.add_option('--pos_dim', type='int', dest='pos_dim', default=30)
+        parser.add_option('--dropout', type='int', dest='dropout', help='dropout probability', default=0.5)
         parser.add_option('--outdir', type='string', dest='output', default='')
         parser.add_option("--learn_embed", action="store_true", dest="learnEmbed", default=True,
                           help='Have additional word embedding input that is updatable.')
         parser.add_option("--use_pos", action="store_false", dest="usepos", default=True,
                           help='Use pos tag information.')
         parser.add_option('--word_drop', type='float', dest='word_drop', default=0, help = 'Word dropout probability (good for fully supervised)')
+        parser.add_option("--activation", type="string", dest="activation", default="tanh")
         return parser.parse_args()
 
     def __init__(self, options):
         self.model = Model() # Dynet's model.
         self.batchsize = options.batchsize # The number of training instances to be processed at a time.
         self.trainer = AdamTrainer(self.model) # The updater (could be MomentumSGDTrainer or SimpleSGDTrainer as well).
+        self.activations = {'tanh': tanh, 'sigmoid': logistic, 'relu': rectify,
+                            'tanh3': (lambda x: tanh(cwise_multiply(cwise_multiply(x, x), x)))}
+        self.dropout = options.dropout
+        self.activation = self.activations[options.activation]
         self.lstm_dims = options.lstm_dims # The dimension of the LSTM output layer.
         self.num_labels = 2 # Default number of labels.
         self.use_u_embedds = options.learnEmbed # Use updatable word embeddings (default false).
@@ -69,6 +75,7 @@ class SentiLSTM:
             print 'loaded labels#:',self.num_labels
 
             to_save_params = [] # Bookkeeping the parameters to be saved.
+            to_save_params.append(options.activation)
             to_save_params.append(self.pos_dim)
             to_save_params.append(self.usepos)
             to_save_params.append(self.rev_labels)
@@ -149,6 +156,7 @@ class SentiLSTM:
         self.pos_dim = saved_params.pop()
         self.usepos = saved_params.pop()
         self.usepos = saved_params.pop()
+        self.activation = self.activations[saved_params.pop()]
         self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
         self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict), self.dim))
         self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
@@ -212,9 +220,9 @@ class SentiLSTM:
             input = concatenate([fw[-1],bw[-1]])
             # I assumed that the activation function is ReLU; it is worth trying tanh as well.
             if H2:
-                r_t = O * rectify(dropout(H2 * (rectify(dropout(H1 * input,0.5))),0.5))
+                r_t = O * self.activation(dropout(H2 * (self.activation(dropout(H1 * input,self.dropout))),self.dropout))
             else:
-                r_t = O * (rectify(dropout(H1 * input,0.5)))
+                r_t = O * (self.activation(dropout(H1 * input,self.dropout)))
             err = pickneglogsoftmax(r_t, label) # Getting the softmax loss function value to backprop later.
             errors.append(err)
         return errors
@@ -332,9 +340,9 @@ class SentiLSTM:
 
         input = concatenate([fw[-1], bw[-1]])
         if H2:
-            r_t = O * rectify(H2 * (rectify(H1 * input)))
+            r_t = O * self.activation(H2 * (self.activation(H1 * input)))
         else:
-            r_t = O * (rectify(H1 * input))
+            r_t = O * (self.activation(H1 * input))
         label = np.argmax(r_t.npvalue())
         return self.rev_labels[label]
 
