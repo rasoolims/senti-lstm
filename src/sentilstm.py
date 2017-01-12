@@ -15,6 +15,8 @@ class SentiLSTM:
         parser.add_option('--params', dest='params', help='Parameters file', metavar='FILE', default='params.pickle')
         parser.add_option('--embed', dest='embed', help='Word embeddings for fixed embeddings', metavar='FILE')
         parser.add_option('--senti', dest='sentiwn', help='Sentiwordnet file (word\tpos\tneg in each line)', metavar='FILE')
+        parser.add_option('--cluster', dest='cluster', help='Word cluster file (cluster\tword\tfreq in each line)',
+                          metavar='FILE')
         parser.add_option('--init', dest='embed_init', help='Word embeddings initialization for updateable embeddings', metavar='FILE')
         parser.add_option('--model', dest='model', help='Load/Save model file', metavar='FILE', default='model.model')
         parser.add_option('--epochs', type='int', dest='epochs', default=5)
@@ -24,6 +26,7 @@ class SentiLSTM:
         parser.add_option('--embed_dim', type='int', dest='embed_dim', help='learnable word embedding dimension', default=100)
         parser.add_option('--hidden2', type='int', dest='hidden2_units', default=0)
         parser.add_option('--pos_dim', type='int', dest='pos_dim', default=30)
+        parser.add_option('--cluster_dim', type='int', dest='cluster_dim', default=50)
         parser.add_option('--dropout', type='int', dest='dropout', help='dropout probability', default=0.5)
         parser.add_option('--outdir', type='string', dest='output', default='')
         parser.add_option("--learn_embed", action="store_true", dest="learnEmbed", default=True,
@@ -118,6 +121,21 @@ class SentiLSTM:
                 self.embed_lookup.init_row(0, [0] * self.dim)
                 for word, i in self.word_dict.iteritems():
                     self.embed_lookup.init_row(i, embed[word])
+            self.use_clusters = False
+            self.cluster_dict = None
+            self.word2cluster = dict()
+            self.cluster_dim = options.cluster_dim
+            if options.cluster != None:
+                self.use_clusters = True
+                clusters = set()
+                for line in codecs.open(os.path.abspath(options.cluster), 'r'):
+                    cluster,word,freq = line.split()
+                    clusters.add(cluster)
+                    self.word2cluster[word] = cluster
+                self.cluster_dict = {cluster: i+1 for i, cluster in enumerate(clusters)}
+                self.cluster_lookup = self.model.add_lookup_parameters((len(self.cluster_dict) + 1, self.cluster_dim))
+                self.cluster_lookup.init_row(0, [0] * self.dim)
+                print 'num of clusters',len(self.cluster_dict),', num of words',len(self.word2cluster)
 
             self.use_sentiwn = False
             self.sentiwn_dict = None
@@ -139,6 +157,10 @@ class SentiLSTM:
                 self.pos_embed_lookup.set_updated(True)
             if options.learnEmbed: self.embed_updatable_lookup.set_updated(True)
 
+            to_save_params.append(self.cluster_dim)
+            to_save_params.append(self.use_clusters)
+            to_save_params.append(self.cluster_dict)
+            to_save_params.append(self.word2cluster)
             to_save_params.append(self.pos_dict)
             to_save_params.append(self.word_dict)
             to_save_params.append(self.sentiwn_dict)
@@ -149,7 +171,8 @@ class SentiLSTM:
             to_save_params.append(self.use_fixed_embed)
             print 'Loaded word embeddings. Vector dimensions:', self.dim
 
-            inp_dim = self.dim + (self.embed_dim if options.learnEmbed else 0) + (self.pos_dim if self.usepos else 0) + (2 if self.use_sentiwn else 0)
+            inp_dim = self.dim + (self.embed_dim if options.learnEmbed else 0) + (self.pos_dim if self.usepos else 0) \
+                      + (2 if self.use_sentiwn else 0) + (self.cluster_dim if self.use_clusters else 0)
             self.builders = [LSTMBuilder(1, inp_dim, self.lstm_dims, self.model),
                              LSTMBuilder(1, inp_dim, self.lstm_dims, self.model)] # Creating two lstms (forward and backward).
             self.hid_dim = options.hidden_units
@@ -184,6 +207,10 @@ class SentiLSTM:
         self.sentiwn_dict = saved_params.pop()
         self.word_dict = saved_params.pop()
         self.pos_dict = saved_params.pop()
+        self.word2cluster = saved_params.pop()
+        self.cluster_dict = saved_params.pop()
+        self.use_clusters = saved_params.pop()
+        self.cluster_dim = saved_params.pop()
         self.num_labels = saved_params.pop()
         self.label_dict = saved_params.pop()
         self.rev_labels = saved_params.pop()
@@ -195,7 +222,8 @@ class SentiLSTM:
         self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
         self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict), self.dim))
         self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
-        inp_dim = self.dim + (self.embed_dim if self.use_u_embedds else 0) + (self.pos_dim if self.usepos else 0) + (2 if self.use_sentiwn else 0)
+        inp_dim = self.dim + (self.embed_dim if self.use_u_embedds else 0) + (self.pos_dim if self.usepos else 0) \
+                  + (2 if self.use_sentiwn else 0) + (self.cluster_dim if self.use_clusters else 0)
         self.builders = [LSTMBuilder(1, inp_dim, self.lstm_dims, self.model),
                          LSTMBuilder(1, inp_dim, self.lstm_dims, self.model)]
         self.H1 = self.model.add_parameters((self.hid_dim, self.hid_inp_dim))
@@ -217,6 +245,7 @@ class SentiLSTM:
             senti_word_ids = []
             wordsu = [] # For adding updatable word indices.
             pos_tags = []
+            clusters = []
             for w in tokens:
                 orig,trans,pos = w,'',''
                 wordu = orig
@@ -256,11 +285,20 @@ class SentiLSTM:
                         senti_word_ids.append(0)
                 else:
                     senti_word_ids.append(0)
+
+                if self.use_clusters:
+                    if trans in self.word2cluster:
+                        clusters.append(self.cluster_dict[self.word2cluster[trans]])
+                    elif orig in self.word2cluster:
+                        clusters.append(self.cluster_dict[self.word2cluster[orig]])
+                    else: clusters.append(0)
+                else: clusters.append(0)
             word_embeddings = [self.embed_lookup[i] if self.use_fixed_embed else None for i in words]
+            cluster_embeddings = [self.cluster_lookup[i] if self.use_clusters else None for i in clusters]
             senti_embeddings = [self.senti_embed_lookup[i] if self.use_sentiwn else None for i in senti_word_ids]
             updatable_embeddings = [self.embed_updatable_lookup[wordsu[i]]  if self.use_u_embedds else None for i in xrange(len(wordsu))]
             tag_embeddings = [self.pos_embed_lookup[pos_tags[i]] if self.usepos else None for i in xrange(len(pos_tags))]
-            seq_input = [concatenate(filter(None, [word_embeddings[i],updatable_embeddings[i],tag_embeddings[i],senti_embeddings[i]])) for i in xrange(len(wordsu))]
+            seq_input = [concatenate(filter(None, [word_embeddings[i],updatable_embeddings[i],tag_embeddings[i],senti_embeddings[i],cluster_embeddings[i]])) for i in xrange(len(wordsu))]
             if not self.pooling: pool_input = None
             else:
                 pool_input = seq_input[0]
@@ -367,6 +405,7 @@ class SentiLSTM:
         wordsu = []
         pos_tags = []
         senti_word_ids = []
+        clusters = []
         for w in tokens:
             word = w if not self.usepos else w[:w.rfind('|||')]
             tag = w[w.rfind('|||')+3:] if self.usepos else None
@@ -391,14 +430,20 @@ class SentiLSTM:
                     senti_word_ids.append(0)
             else:
                 senti_word_ids.append(0)
+
+            if self.use_clusters and word in self.word2cluster:
+                clusters.append(self.cluster_dict[self.word2cluster[word]])
+            else:
+                clusters.append(0)
+
         word_embeddings = [self.embed_lookup[i] if self.use_fixed_embed else None for i in words]
+        cluster_embeddings = [self.cluster_lookup[i] if self.use_clusters else None for i in clusters]
         senti_embeddings = [self.senti_embed_lookup[i] if self.use_sentiwn else None for i in senti_word_ids]
         updatable_embeddings = [self.embed_updatable_lookup[wordsu[i]] if self.use_u_embedds else None for i in
                                 xrange(len(wordsu))]
         tag_embeddings = [self.pos_embed_lookup[pos_tags[i]] if self.usepos else None for i in xrange(len(pos_tags))]
-        seq_input = [concatenate(
-            filter(None, [word_embeddings[i], updatable_embeddings[i], tag_embeddings[i], senti_embeddings[i]])) for i
-                     in xrange(len(wordsu))]
+        seq_input = [concatenate(filter(None, [word_embeddings[i], updatable_embeddings[i], tag_embeddings[i],
+                                               senti_embeddings[i], cluster_embeddings[i]])) for i in xrange(len(wordsu))]
         if not self.pooling:  pool_input = None
         else:
             pool_input = seq_input[0]
