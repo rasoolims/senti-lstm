@@ -214,8 +214,8 @@ class SentiLSTM:
         self.num_labels = saved_params.pop()
         self.label_dict = saved_params.pop()
         self.rev_labels = saved_params.pop()
-        self.pos_dim = saved_params.pop()
         self.usepos = saved_params.pop()
+        self.pos_dim = saved_params.pop()
         self.activation = self.activations[saved_params.pop()]
         self.pooling = saved_params.pop()
         self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
