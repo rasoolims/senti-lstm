@@ -145,10 +145,10 @@ class SentiLSTM:
                 entries = {line.split()[0]: [float(f) for f in line.strip().split()[1:]] for line in fp}
                 self.sentiwn_dict = {word: i + 1 for i, word in enumerate(entries)}
                 self.senti_embed_lookup = self.model.add_lookup_parameters((len(self.sentiwn_dict) + 1, 2))
+                self.senti_embed_lookup.set_updated(False)
                 self.senti_embed_lookup.init_row(0, [0,0])
                 for word, i in self.sentiwn_dict.iteritems():
                     self.senti_embed_lookup.init_row(i, entries[word])
-                self.senti_embed_lookup.set_updated(False)
                 print 'loaded',len(entries),'sentiwordnet entries.'
 
             self.pos_dict = {pos:i for i,pos in enumerate(seen_pos_tags)} if self.usepos else None
@@ -219,11 +219,12 @@ class SentiLSTM:
         self.activation = self.activations[saved_params.pop()]
         self.pooling = saved_params.pop()
         self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
+        self.embed_updatable_lookup = self.model.add_lookup_parameters(
+            (len(self.word_updatable_dict) + 1, self.embed_dim)) if self.use_u_embedds else None
         self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict) + 1, self.dim)) if self.use_fixed_embed else None
         self.cluster_lookup = self.model.add_lookup_parameters((len(self.cluster_dict) + 1, self.cluster_dim)) if self.use_clusters else None
         self.senti_embed_lookup = self.model.add_lookup_parameters((len(self.sentiwn_dict) + 1, 2)) if self.use_sentiwn else None
-        self.embed_updatable_lookup = self.model.add_lookup_parameters(
-            (len(self.word_updatable_dict) + 1, self.embed_dim)) if self.use_u_embedds else None
+        self.pos_embed_lookup = self.model.add_lookup_parameters((len(self.pos_dict), self.pos_dim)) if self.usepos else None
         inp_dim = self.dim + (self.embed_dim if self.use_u_embedds else 0) + (self.pos_dim if self.usepos else 0) \
                   + (2 if self.use_sentiwn else 0) + (self.cluster_dim if self.use_clusters else 0)
         self.builders = [LSTMBuilder(1, inp_dim, self.lstm_dims, self.model),
