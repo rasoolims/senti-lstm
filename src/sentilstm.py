@@ -125,7 +125,6 @@ class SentiLSTM:
             self.cluster_dict = None
             self.word2cluster = dict()
             self.cluster_dim = options.cluster_dim
-            self.cluster_lookup = None
             if options.cluster != None:
                 self.use_clusters = True
                 clusters = set()
@@ -222,6 +221,7 @@ class SentiLSTM:
         self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
         self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict), self.dim)) if self.use_fixed_embed else None
         self.cluster_lookup = self.model.add_lookup_parameters((len(self.cluster_dict) + 1, self.cluster_dim)) if self.use_clusters else None
+        self.senti_embed_lookup = self.model.add_lookup_parameters((len(self.sentiwn_dict) + 1, 2)) if self.use_sentiwn else None
         self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
         inp_dim = self.dim + (self.embed_dim if self.use_u_embedds else 0) + (self.pos_dim if self.usepos else 0) \
                   + (2 if self.use_sentiwn else 0) + (self.cluster_dim if self.use_clusters else 0)
