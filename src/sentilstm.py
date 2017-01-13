@@ -125,6 +125,7 @@ class SentiLSTM:
             self.cluster_dict = None
             self.word2cluster = dict()
             self.cluster_dim = options.cluster_dim
+            self.cluster_lookup = None
             if options.cluster != None:
                 self.use_clusters = True
                 clusters = set()
