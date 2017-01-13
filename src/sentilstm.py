@@ -27,16 +27,16 @@ class SentiLSTM:
         parser.add_option('--hidden2', type='int', dest='hidden2_units', default=0)
         parser.add_option('--pos_dim', type='int', dest='pos_dim', default=30)
         parser.add_option('--cluster_dim', type='int', dest='cluster_dim', default=50)
-        parser.add_option('--dropout', type='int', dest='dropout', help='dropout probability', default=0.5)
+        parser.add_option('--dropout', type='int', dest='dropout', help='dropout probability', default=0.0)
         parser.add_option('--outdir', type='string', dest='output', default='')
         parser.add_option("--learn_embed", action="store_true", dest="learnEmbed", default=True,
                           help='Have additional word embedding input that is updatable.')
-        parser.add_option("--use_pos", action="store_false", dest="usepos", default=True,
+        parser.add_option("--use_pos", action="store_true", dest="usepos", default=False,
                           help='Use pos tag information.')
         parser.add_option("--pool", action="store_true", dest="usepool", default=False,
                           help='Use average pool as input feature.')
         parser.add_option('--word_drop', type='float', dest='word_drop', default=0, help = 'Word dropout probability (good for fully supervised)')
-        parser.add_option("--activation", type="string", dest="activation", default="tanh")
+        parser.add_option("--activation", type="string", dest="activation", default="relu")
         parser.add_option("--trainer", type="string", dest="trainer", default="adam",help='adam,sgd,momentum,adadelta,adagrad')
         return parser.parse_args()
 
@@ -215,7 +215,6 @@ class SentiLSTM:
         self.label_dict = saved_params.pop()
         self.rev_labels = saved_params.pop()
         self.pos_dim = saved_params.pop()
-        self.usepos = saved_params.pop()
         self.usepos = saved_params.pop()
         self.activation = self.activations[saved_params.pop()]
         self.pooling = saved_params.pop()
