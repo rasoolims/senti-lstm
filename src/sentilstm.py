@@ -27,7 +27,7 @@ class SentiLSTM:
         parser.add_option('--hidden2', type='int', dest='hidden2_units', default=0)
         parser.add_option('--pos_dim', type='int', dest='pos_dim', default=30)
         parser.add_option('--cluster_dim', type='int', dest='cluster_dim', default=50)
-        parser.add_option('--dropout', type='int', dest='dropout', help='dropout probability', default=0.0)
+        parser.add_option('--dropout', type='float', dest='dropout', help='dropout probability', default=0.0)
         parser.add_option('--outdir', type='string', dest='output', default='')
         parser.add_option("--learn_embed", action="store_false", dest="learnEmbed", default=True,
                           help='Have additional word embedding input that is updatable; default true.')
