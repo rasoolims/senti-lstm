@@ -29,8 +29,8 @@ class SentiLSTM:
         parser.add_option('--cluster_dim', type='int', dest='cluster_dim', default=50)
         parser.add_option('--dropout', type='int', dest='dropout', help='dropout probability', default=0.0)
         parser.add_option('--outdir', type='string', dest='output', default='')
-        parser.add_option("--learn_embed", action="store_true", dest="learnEmbed", default=True,
-                          help='Have additional word embedding input that is updatable.')
+        parser.add_option("--learn_embed", action="store_false", dest="learnEmbed", default=True,
+                          help='Have additional word embedding input that is updatable; default true.')
         parser.add_option("--use_pos", action="store_true", dest="usepos", default=False,
                           help='Use pos tag information.')
         parser.add_option("--pool", action="store_true", dest="usepool", default=False,
