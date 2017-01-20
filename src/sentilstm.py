@@ -323,13 +323,14 @@ class SentiLSTM:
         return errors
 
     def train(self, options, best_acc):
-        tf = codecs.open(options.train_data, 'r')
+        rows = codecs.open(options.train_data, 'r').read().strip().split('\n')
+        random.shuffle(rows)
         instances = []
         sz = 0
         i = 0
         loss = 0
         start = time.time()
-        for row in tf:
+        for row in rows:
             instances.append(row)
             if len(instances)>=self.batchsize:
                 errs = self.build_graph(instances)
