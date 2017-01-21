@@ -68,9 +68,11 @@ class SentiLSTM:
                         if '|||' in f:
                             if not self.usepos:
                                 assert f.count('|||') == 1
+                                seen_words.add(f[:f.rfind('|||')])
                                 seen_words.add(f[f.rfind('|||') + 3:])
                             else:
                                 assert f.count('|||') == 2
+                                seen_words.add(f[:f.rfind('|||')])
                                 seen_words.add(f[f.find('|||') + 3:f.rfind('|||')])
                                 seen_pos_tags.add(f[f.rfind('|||') + 3:])
                         else:
