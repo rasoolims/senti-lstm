@@ -63,20 +63,19 @@ class SentiLSTM:
             seen_pos_tags = set()
             for row in tf:
                 spl = row.strip().split('\t')
-                if options.learnEmbed: # If we need to learn embeddings, we have to build seen_words.
-                    for f in spl[0].strip().split():
-                        if '|||' in f:
-                            if not self.usepos:
-                                assert f.count('|||') == 1
-                                seen_words.add(f[:f.rfind('|||')])
-                                seen_words.add(f[f.rfind('|||') + 3:])
-                            else:
-                                assert f.count('|||') == 2
-                                seen_words.add(f[:f.rfind('|||')])
-                                seen_words.add(f[f.find('|||') + 3:f.rfind('|||')])
-                                seen_pos_tags.add(f[f.rfind('|||') + 3:])
+                for f in spl[0].strip().split():
+                    if '|||' in f:
+                        if not self.usepos:
+                            assert f.count('|||') == 1
+                            seen_words.add(f[:f.rfind('|||')])
+                            seen_words.add(f[f.rfind('|||') + 3:])
                         else:
-                            seen_words.add(f)
+                            assert f.count('|||') == 2
+                            seen_words.add(f[:f.rfind('|||')])
+                            seen_words.add(f[f.find('|||') + 3:f.rfind('|||')])
+                            seen_pos_tags.add(f[f.rfind('|||') + 3:])
+                    else:
+                        seen_words.add(f)
 
                 labels.add(spl[1]) # The label is separated by tab at the end of line.
             tf.close()
@@ -129,12 +128,20 @@ class SentiLSTM:
             self.cluster_dim = options.cluster_dim
             if options.cluster != None:
                 self.use_clusters = True
-                clusters = set()
                 for line in codecs.open(os.path.abspath(options.cluster), 'r'):
                     cluster,word,freq = line.split()
-                    clusters.add(cluster)
                     self.word2cluster[word] = cluster
-                self.cluster_dict = {cluster: i+1 for i, cluster in enumerate(clusters)}
+
+                seen_clusters = set()
+                for word in seen_words:
+                    if word in self.word2cluster:
+                        seen_clusters.add(self.word2cluster[word])
+
+                for word in self.word2cluster.keys():
+                    if not self.word2cluster[word] in seen_clusters:
+                        del self.word2cluster[word]
+
+                self.cluster_dict = {cluster: i+1 for i, cluster in enumerate(seen_clusters)}
                 self.cluster_lookup = self.model.add_lookup_parameters((len(self.cluster_dict) + 1, self.cluster_dim))
                 self.cluster_lookup.init_row(0, [0] * self.cluster_dim)
                 print 'num of clusters',len(self.cluster_dict),', num of words',len(self.word2cluster)
