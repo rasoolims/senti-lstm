@@ -35,6 +35,8 @@ class SentiLSTM:
                           help='Use pos tag information.')
         parser.add_option("--pool", action="store_true", dest="usepool", default=False,
                           help='Use average pool as input feature.')
+        parser.add_option("--save_iters", action="store_true", dest="save_iters", default=False,
+                          help='Save all iterations.')
         parser.add_option('--word_drop', type='float', dest='word_drop', default=0, help = 'Word dropout probability (good for fully supervised)')
         parser.add_option("--activation", type="string", dest="activation", default="relu")
         parser.add_option("--trainer", type="string", dest="trainer", default="adam",help='adam,sgd,momentum,adadelta,adagrad')
@@ -484,8 +486,10 @@ if __name__ == '__main__':
         best_acc = float('-inf')
         for i in xrange(options.epochs):
             best_acc = senti_lstm.train(options, best_acc)
-            print 'saving for iteration',i
-            senti_lstm.model.save(os.path.join(options.output, options.model+'_iter_'+str(i)))
+            if options.save_iters:
+                print 'saving for iteration',i
+                senti_lstm.model.save(os.path.join(options.output, options.model+'_iter_'+str(i)))
+        senti_lstm.model.save(os.path.join(options.output, options.model + '.final'))
     if options.input_data != None:
         fp = codecs.open(os.path.abspath(options.input_data), 'r')
         fw = codecs.open(os.path.abspath(options.output_data), 'w')
