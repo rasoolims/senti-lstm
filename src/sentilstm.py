@@ -356,7 +356,10 @@ class SentiLSTM:
         i = 0
         loss = 0
         start = time.time()
+        self.max_len = 0
         for row in rows:
+            sen_len = len(row.split('\t')[0].split())
+            if sen_len>self.max_len: self.max_len = sen_len
             instances.append(row)
             if len(instances)>=self.batchsize:
                 errs = self.build_graph(instances)
@@ -369,7 +372,7 @@ class SentiLSTM:
                 i+= 1
                 if i%1 == 0: # You can change this to report (and save model if required) less frequently.
                     self.trainer.status()
-                    print 'loss:',loss / sz,'time:',time.time()-start
+                    print 'loss:',loss / sz,'time:',time.time()-start,'max_len',self.max_len
                     start = time.time()
                     sz = 0
                     loss = 0
@@ -392,6 +395,7 @@ class SentiLSTM:
                             self.model.save(os.path.join(options.output, options.model))
                 errs = []
                 instances = []
+                self.max_len = 0
                 renew_cg()
         if len(instances)>=0:
             errs = self.build_graph(instances)
