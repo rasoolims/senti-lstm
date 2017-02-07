@@ -67,8 +67,8 @@ class SentiLSTM:
             seen_pos_tags = set()
             for row in tf:
                 spl = row.strip().split('\t')
-                if len(spl[0].strip().split())>max_len:
-                    max_len = len(spl[0].strip().split())
+                if len(spl[0].strip().split())>self.max_len:
+                    self.max_len = len(spl[0].strip().split())
                 for f in spl[0].strip().split():
                     if '|||' in f:
                         if not self.usepos:
