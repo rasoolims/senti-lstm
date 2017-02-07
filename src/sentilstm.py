@@ -62,6 +62,7 @@ class SentiLSTM:
         self.pad_id = 1
         self.save_best = options.save_best
         if options.train_data != None:
+            if not os.path.isdir(options.output): os.mkdir(options.output)
             self.usepos = options.usepos
             self.pooling = options.usepool
             labels = set()
