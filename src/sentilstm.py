@@ -37,6 +37,8 @@ class SentiLSTM:
                           help='Use average pool as input feature.')
         parser.add_option("--save_iters", action="store_true", dest="save_iters", default=False,
                           help='Save all iterations.')
+        parser.add_option("--save_best", action="store_false", dest="save_best", default=True,
+                          help='Save all iterations.')
         parser.add_option('--word_drop', type='float', dest='word_drop', default=0, help = 'Word dropout probability (good for fully supervised)')
         parser.add_option("--activation", type="string", dest="activation", default="relu")
         parser.add_option("--trainer", type="string", dest="trainer", default="adam",help='adam,sgd,momentum,adadelta,adagrad')
@@ -58,6 +60,7 @@ class SentiLSTM:
         self.pos_dim = options.pos_dim
         self.max_len = 0
         self.pad_id = 1
+        self.save_best = options.save_best
         if options.train_data != None:
             self.usepos = options.usepos
             self.pooling = options.usepool
@@ -312,7 +315,8 @@ class SentiLSTM:
                     else: clusters.append(0)
                 else: clusters.append(0)
 
-            # padding
+            '''
+             # padding
             if len(words)<self.max_len:
                 for i in range(len(words),self.max_len):
                     words.append(self.pad_id)
@@ -320,8 +324,7 @@ class SentiLSTM:
                     senti_word_ids.append(self.pad_id)
                     wordsu.append(self.pad_id)
                     pos_tags.append(self.pad_id)
-
-
+            '''
             word_embeddings = [self.embed_lookup[i] if self.use_fixed_embed else None for i in words]
             cluster_embeddings = [self.cluster_lookup[i] if self.use_clusters else None for i in clusters]
             senti_embeddings = [self.senti_embed_lookup[i] if self.use_sentiwn else None for i in senti_word_ids]
@@ -391,8 +394,11 @@ class SentiLSTM:
                         print 'acc', acc
                         if acc>best_acc:
                             best_acc = acc
-                            print 'saving best accurary', best_acc
-                            self.model.save(os.path.join(options.output, options.model))
+                            if self.save_best:
+                                print 'saving best accurary', best_acc
+                                self.model.save(os.path.join(options.output, options.model))
+                            else:
+                                print 'best accurary', best_acc
                 errs = []
                 instances = []
                 self.max_len = 0
@@ -424,8 +430,11 @@ class SentiLSTM:
                 print 'acc', acc
                 if acc > best_acc:
                     best_acc = acc
-                    print 'saving best accurary',best_acc
-                    self.model.save(os.path.join(options.output, options.model))
+                    if self.save_best:
+                        print 'saving best accurary',best_acc
+                        self.model.save(os.path.join(options.output, options.model))
+                    else:
+                        print 'best accurary', best_acc
         return best_acc
 
     def predict(self, sentence):
@@ -508,6 +517,9 @@ if __name__ == '__main__':
             if options.save_iters:
                 print 'saving for iteration',i
                 senti_lstm.model.save(os.path.join(options.output, options.model+'_iter_'+str(i)))
+            else:
+                print 'end of iteration', i
+                print 'end of iteration', i
         senti_lstm.model.save(os.path.join(options.output, options.model + '.final'))
     if options.input_data != None:
         fp = codecs.open(os.path.abspath(options.input_data), 'r')
