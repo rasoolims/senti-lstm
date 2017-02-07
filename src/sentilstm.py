@@ -403,6 +403,8 @@ class SentiLSTM:
                 instances = []
                 self.max_len = 0
                 renew_cg()
+        '''
+        skipping the rest because it does have the same batch size
         if len(instances)>=0:
             errs = self.build_graph(instances)
             sum_errs = esum(errs)
@@ -435,6 +437,7 @@ class SentiLSTM:
                         self.model.save(os.path.join(options.output, options.model))
                     else:
                         print 'best accurary', best_acc
+        '''
         return best_acc
 
     def predict(self, sentence):
