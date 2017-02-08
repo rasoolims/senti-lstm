@@ -12,6 +12,8 @@ class SentiLSTM:
         parser.add_option('--dev', dest='dev_data', help='dev data', metavar='FILE')
         parser.add_option('--input', dest='input_data', help='input data', metavar='FILE')
         parser.add_option('--output', dest='output_data', help='output data', metavar='FILE')
+        parser.add_option('--input_folder', dest='input_folder', help='input folder for batch decoding of files', metavar='FILE')
+        parser.add_option('--output_folder', dest='output_folder', help='output folder for batch decoding of files', metavar='FILE')
         parser.add_option('--params', dest='params', help='Parameters file', metavar='FILE', default='params.pickle')
         parser.add_option('--embed', dest='embed', help='Word embeddings for fixed embeddings', metavar='FILE')
         parser.add_option('--senti', dest='sentiwn', help='Sentiwordnet file (word\tpos\tneg in each line)', metavar='FILE')
@@ -525,7 +527,7 @@ if __name__ == '__main__':
                 print 'end of iteration', i
                 print 'end of iteration', i
         senti_lstm.model.save(os.path.join(options.output, options.model + '.final'))
-    if options.input_data != None:
+    if options.input_data != None and options.output_data!=None and options.model != None and options.params !=None:
         fp = codecs.open(os.path.abspath(options.input_data), 'r')
         fw = codecs.open(os.path.abspath(options.output_data), 'w')
         i = 0
@@ -538,3 +540,21 @@ if __name__ == '__main__':
         fw.close()
         fp.close()
         sys.stdout.write('done in '+str(time.time()-start)+'\n')
+    if options.input_folder != None and options.output_folder != None and options.model != None and options.params !=None:
+        inp_dir = os.path.abspath(options.input_folder)+'/'
+        outp_dir = os.path.abspath(options.output_folder)+'/'
+
+        for f in os.listdir(inp_dir):
+            print 'processing',f
+            fp = codecs.open(inp_dir+f, 'r')
+            fw = codecs.open(outp_dir+f, 'w')
+            i = 0
+            start = time.time()
+            for line in fp:
+               sen = line.strip().split('\t')[0]
+               fw.write(sen+'\t'+senti_lstm.predict(sen)+'\n')
+               i += 1
+               if i%100==0: sys.stdout.write(str(i)+'...')
+            fw.close()
+            fp.close()
+            sys.stdout.write('done in '+str(time.time()-start)+'\n')
