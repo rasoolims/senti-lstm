@@ -110,7 +110,7 @@ class SentiLSTM:
             self.embed_dim = options.embed_dim
             self.embed_updatable_lookup = self.model.add_lookup_parameters(
                 (len(seen_words) + 2, self.embed_dim)) if options.learnEmbed else None  # Updatable word embeddings.
-            self.word_updatable_dict = {word: i + 2 for i, word in enumerate(seen_words)} # 0th index represent the OOV.
+            self.word_updatable_dict = {word: i + 2 for i, word in enumerate(seen_words)} if  options.learnEmbed else {}# 0th index represent the OOV.
             if options.embed_init!=None:
                 fp = codecs.open(os.path.abspath(options.embed_init), 'r')
                 embed = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in fp}
@@ -240,6 +240,7 @@ class SentiLSTM:
         self.activation = self.activations[saved_params.pop()]
         self.pooling = saved_params.pop()
         self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
+        self.use_u_embedds = False #todo
         print 'self.use_u_embedds',self.use_u_embedds
         self.embed_updatable_lookup = self.model.add_lookup_parameters(
             (len(self.word_updatable_dict) + 1, self.embed_dim)) if self.use_u_embedds else None
