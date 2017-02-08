@@ -240,6 +240,7 @@ class SentiLSTM:
         self.activation = self.activations[saved_params.pop()]
         self.pooling = saved_params.pop()
         self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
+        print 'self.use_u_embedds',self.use_u_embedds
         self.embed_updatable_lookup = self.model.add_lookup_parameters(
             (len(self.word_updatable_dict) + 1, self.embed_dim)) if self.use_u_embedds else None
         self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict) + 1, self.dim)) if self.use_fixed_embed else None
