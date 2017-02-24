@@ -39,7 +39,7 @@ class SentiLSTM:
                           help='Use average pool as input feature.')
         parser.add_option("--save_iters", action="store_true", dest="save_iters", default=False,
                           help='Save all iterations.')
-        parser.add_option("--save_best", action="store_false", dest="save_best", default=True,
+        parser.add_option("--save_best", action="store_true", dest="save_best", default=False,
                           help='Save all iterations.')
         parser.add_option('--word_drop', type='float', dest='word_drop', default=0, help = 'Word dropout probability (good for fully supervised)')
         parser.add_option("--activation", type="string", dest="activation", default="relu")
@@ -524,7 +524,6 @@ if __name__ == '__main__':
                 print 'saving for iteration',i
                 senti_lstm.model.save(os.path.join(options.output, options.model+'_iter_'+str(i)))
             else:
-                print 'end of iteration', i
                 print 'end of iteration', i
         senti_lstm.model.save(os.path.join(options.output, options.model + '.final'))
     if options.input_data != None and options.output_data!=None and options.model != None and options.params !=None:
