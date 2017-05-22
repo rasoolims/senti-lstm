@@ -527,7 +527,7 @@ class SentiLSTM:
         return self.rev_labels[label]
 
 if __name__ == '__main__':
-    (options, args) = SentiLSTM.parse_options()
+    (options, args) = parse_options()
     print options
     senti_lstm = SentiLSTM(options)
 
