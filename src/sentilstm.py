@@ -1,51 +1,66 @@
-from dynet import *
+#from dynet import *
 import os, codecs, pickle,time
 from optparse import OptionParser
 import numpy as np
 import random
 
-class SentiLSTM:
-    @staticmethod
-    def parse_options():
-        parser = OptionParser()
-        parser.add_option('--train', dest='train_data', help='train data', metavar='FILE')
-        parser.add_option('--dev', dest='dev_data', help='dev data', metavar='FILE')
-        parser.add_option('--input', dest='input_data', help='input data', metavar='FILE')
-        parser.add_option('--output', dest='output_data', help='output data', metavar='FILE')
-        parser.add_option('--input_folder', dest='input_folder', help='input folder for batch decoding of files', metavar='FILE')
-        parser.add_option('--output_folder', dest='output_folder', help='output folder for batch decoding of files', metavar='FILE')
-        parser.add_option('--params', dest='params', help='Parameters file', metavar='FILE', default='params.pickle')
-        parser.add_option('--embed', dest='embed', help='Word embeddings for fixed embeddings', metavar='FILE')
-        parser.add_option('--senti', dest='sentiwn', help='Sentiwordnet file (word\tpos\tneg in each line)', metavar='FILE')
-        parser.add_option('--cluster', dest='cluster', help='Word cluster file (cluster\tword\tfreq in each line)',
-                          metavar='FILE')
-        parser.add_option('--init', dest='embed_init', help='Word embeddings initialization for updateable embeddings', metavar='FILE')
-        parser.add_option('--model', dest='model', help='Load/Save model file', metavar='FILE', default='model.model')
-        parser.add_option('--epochs', type='int', dest='epochs', default=5)
-        parser.add_option('--batch', type='int', dest='batchsize', default=128)
-        parser.add_option('--lstmdims', type='int', dest='lstm_dims', default=200)
-        parser.add_option('--hidden', type='int', dest='hidden_units', default=200)
-        parser.add_option('--embed_dim', type='int', dest='embed_dim', help='learnable word embedding dimension', default=100)
-        parser.add_option('--hidden2', type='int', dest='hidden2_units', default=0)
-        parser.add_option('--pos_dim', type='int', dest='pos_dim', default=30)
-        parser.add_option('--cluster_dim', type='int', dest='cluster_dim', default=50)
-        parser.add_option('--dropout', type='float', dest='dropout', help='dropout probability', default=0.0)
-        parser.add_option('--outdir', type='string', dest='output', default='')
-        parser.add_option("--learn_embed", action="store_false", dest="learnEmbed", default=True,
-                          help='Have additional word embedding input that is updatable; default true.')
-        parser.add_option("--use_pos", action="store_true", dest="usepos", default=False,
-                          help='Use pos tag information.')
-        parser.add_option("--pool", action="store_true", dest="usepool", default=False,
-                          help='Use average pool as input feature.')
-        parser.add_option("--save_iters", action="store_true", dest="save_iters", default=False,
-                          help='Save all iterations.')
-        parser.add_option("--save_best", action="store_true", dest="save_best", default=False,
-                          help='Save all iterations.')
-        parser.add_option('--word_drop', type='float', dest='word_drop', default=0, help = 'Word dropout probability (good for fully supervised)')
-        parser.add_option("--activation", type="string", dest="activation", default="relu")
-        parser.add_option("--trainer", type="string", dest="trainer", default="adam",help='adam,sgd,momentum,adadelta,adagrad')
-        return parser.parse_args()
 
+def parse_options():
+    parser = OptionParser()
+    parser.add_option('--train', dest='train_data', help='train data', metavar='FILE')
+    parser.add_option('--dev', dest='dev_data', help='dev data', metavar='FILE')
+    parser.add_option('--input', dest='input_data', help='input data', metavar='FILE')
+    parser.add_option('--output', dest='output_data', help='output data', metavar='FILE')
+    parser.add_option('--input_folder', dest='input_folder', help='input folder for batch decoding of files',
+                      metavar='FILE')
+    parser.add_option('--output_folder', dest='output_folder', help='output folder for batch decoding of files',
+                      metavar='FILE')
+    parser.add_option('--params', dest='params', help='Parameters file', metavar='FILE', default='params.pickle')
+    parser.add_option('--embed', dest='embed', help='Word embeddings for fixed embeddings', metavar='FILE')
+    parser.add_option('--senti', dest='sentiwn', help='Sentiwordnet file (word\tpos\tneg in each line)', metavar='FILE')
+    parser.add_option('--cluster', dest='cluster', help='Word cluster file (cluster\tword\tfreq in each line)',
+                      metavar='FILE')
+    parser.add_option('--init', dest='embed_init', help='Word embeddings initialization for updateable embeddings',
+                      metavar='FILE')
+    parser.add_option('--model', dest='model', help='Load/Save model file', metavar='FILE', default='model.model')
+    parser.add_option('--epochs', type='int', dest='epochs', default=5)
+    parser.add_option('--batch', type='int', dest='batchsize', default=128)
+    parser.add_option('--lstmdims', type='int', dest='lstm_dims', default=200)
+    parser.add_option('--hidden', type='int', dest='hidden_units', default=200)
+    parser.add_option('--embed_dim', type='int', dest='embed_dim', help='learnable word embedding dimension',
+                      default=100)
+    parser.add_option('--hidden2', type='int', dest='hidden2_units', default=0)
+    parser.add_option('--pos_dim', type='int', dest='pos_dim', default=30)
+    parser.add_option('--cluster_dim', type='int', dest='cluster_dim', default=50)
+    parser.add_option('--dropout', type='float', dest='dropout', help='dropout probability', default=0.0)
+    parser.add_option('--outdir', type='string', dest='output', default='')
+    parser.add_option("--learn_embed", action="store_false", dest="learnEmbed", default=True,
+                      help='Have additional word embedding input that is updatable; default true.')
+    parser.add_option("--use_pos", action="store_true", dest="usepos", default=False,
+                      help='Use pos tag information.')
+    parser.add_option("--pool", action="store_true", dest="usepool", default=False,
+                      help='Use average pool as input feature.')
+    parser.add_option("--save_iters", action="store_true", dest="save_iters", default=False,
+                      help='Save all iterations.')
+    parser.add_option("--save_best", action="store_true", dest="save_best", default=False,
+                      help='Save all iterations.')
+    parser.add_option('--word_drop', type='float', dest='word_drop', default=0,
+                      help='Word dropout probability (good for fully supervised)')
+    parser.add_option('--mem', type='int', dest='mem', default=20480)
+    parser.add_option("--activation", type="string", dest="activation", default="relu")
+    parser.add_option("--trainer", type="string", dest="trainer", default="adam",
+                      help='adam,sgd,momentum,adadelta,adagrad')
+    return parser.parse_args()
+
+import _dynet as dy
+(options, args) = parse_options()
+dyparams = dy.DynetParams()
+dyparams.from_args()
+dyparams.set_mem(options.mem)
+dyparams.init()
+from dynet import *
+
+class SentiLSTM:
     def __init__(self, options):
         self.model = Model() # Dynet's model.
         self.batchsize = options.batchsize # The number of training instances to be processed at a time.
