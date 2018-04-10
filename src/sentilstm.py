@@ -132,7 +132,7 @@ class SentiLSTM:
                 self.embed_lookup.init_row(0, [0] * self.dim)
                 for word in self.word_dict.keys():
                     self.embed_lookup.init_row(self.word_dict[word], embed[word])
-                self.embed_lookup.set_updated(False)
+                #self.embed_lookup.set_updated(False)
 
             self.embed_dim = options.embed_dim
             self.embed_updatable_lookup = self.model.add_lookup_parameters(
