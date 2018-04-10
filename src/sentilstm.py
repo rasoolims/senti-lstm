@@ -143,8 +143,8 @@ class SentiLSTM:
                 embed = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in fp}
                 fp.close()
                 self.dim = len(embed.values()[0]) # Word embedding dimension.
-                self.word_dict = {word: i+2 for i, word in enumerate(embed)}
-                self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict) + 2, self.dim))
+                self.word_dict = {word: i+1 for i, word in enumerate(embed)}
+                self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict) + 1, self.dim))
                 self.embed_lookup.set_updated(False)  # This means that word embeddings cannot change over time.
                 self.embed_lookup.init_row(0, [0] * self.dim)
                 for word, i in self.word_dict.iteritems():
@@ -221,6 +221,8 @@ class SentiLSTM:
             to_save_params.append(self.hid_dim)
             to_save_params.append(self.hid2_dim)
             to_save_params.append(self.hid_inp_dim)
+            to_save_params.append(inp_dim)
+            to_save_params.append(self.lstm_dims)
             with open(os.path.join(options.output, options.params), 'w') as paramsfp:
                 pickle.dump(to_save_params, paramsfp)
             print 'wrote params'
@@ -228,10 +230,13 @@ class SentiLSTM:
             self.read_params(options.params)
             print 'loaded params'
             self.model.populate(options.model)
+            print 'loaded the model'
 
     def read_params(self, f):
         with open(f, 'r') as paramsfp:
             saved_params = pickle.load(paramsfp)
+        self.lstm_dims = saved_params.pop()
+        inp_dim = saved_params.pop()
         self.hid_inp_dim = saved_params.pop()
         self.hid2_dim = saved_params.pop()
         self.hid_dim = saved_params.pop()
@@ -261,8 +266,6 @@ class SentiLSTM:
         self.cluster_lookup = self.model.add_lookup_parameters((len(self.cluster_dict) + 1, self.cluster_dim)) if self.use_clusters else None
         self.senti_embed_lookup = self.model.add_lookup_parameters((len(self.sentiwn_dict) + 1, 2)) if self.use_sentiwn else None
         self.pos_embed_lookup = self.model.add_lookup_parameters((len(self.pos_dict), self.pos_dim)) if self.usepos else None
-        inp_dim = self.dim + (self.embed_dim if self.use_u_embedds else 0) + (self.pos_dim if self.usepos else 0) \
-                  + (2 if self.use_sentiwn else 0) + (self.cluster_dim if self.use_clusters else 0)
         self.builders = [LSTMBuilder(1, inp_dim, self.lstm_dims, self.model),
                          LSTMBuilder(1, inp_dim, self.lstm_dims, self.model)]
         self.H1 = self.model.add_parameters((self.hid_dim, self.hid_inp_dim))
@@ -272,9 +275,9 @@ class SentiLSTM:
 
     def build_graph(self, train_lines):
         errors = []
-        H1 = parameter(self.H1)
-        H2 = parameter(self.H2) if self.H2 != None else None
-        O = parameter(self.O)
+        H1 = self.H1.expr()
+        H2 = self.H2.expr() if self.H2 != None else None
+        O = self.O.expr()
 
         for train_line in train_lines:
             words,label = train_line.strip().split('\t')
@@ -460,9 +463,9 @@ class SentiLSTM:
 
     def predict(self, sentence):
         renew_cg()
-        H1 = parameter(self.H1)
-        H2 = parameter(self.H2) if self.H2 != None else None
-        O = parameter(self.O)
+        H1 = self.H1.expr()
+        H2 = self.H2.expr() if self.H2 != None else None
+        O = self.O.expr()
 
         tokens = sentence.split()
         words = []
