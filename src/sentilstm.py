@@ -132,7 +132,6 @@ class SentiLSTM:
                 self.embed_lookup.init_row(0, [0] * self.dim)
                 for word in self.word_dict.keys():
                     self.embed_lookup.init_row(self.word_dict[word], embed[word])
-                #self.embed_lookup.set_updated(False)
 
             self.embed_dim = options.embed_dim
             self.embed_updatable_lookup = self.model.add_lookup_parameters(
@@ -179,7 +178,6 @@ class SentiLSTM:
                 entries = {line.split()[0]: [float(f) for f in line.strip().split()[1:]] for line in fp}
                 self.sentiwn_dict = {word: i + 1 for i, word in enumerate(entries)}
                 self.senti_embed_lookup = self.model.add_lookup_parameters((len(self.sentiwn_dict) + 1, 2))
-                self.senti_embed_lookup.set_updated(False)
                 self.senti_embed_lookup.init_row(0, [0,0])
                 for word, i in self.sentiwn_dict.iteritems():
                     self.senti_embed_lookup.init_row(i, entries[word])
@@ -188,7 +186,6 @@ class SentiLSTM:
             self.pos_dict = {pos:i+1 for i,pos in enumerate(seen_pos_tags)} if self.usepos else None
             if self.usepos:
                 self.pos_embed_lookup = self.model.add_lookup_parameters((len(self.pos_dict)+1, self.pos_dim))
-            if options.learnEmbed: self.embed_updatable_lookup.set_updated(True)
 
             to_save_params.append(self.cluster_dim)
             to_save_params.append(self.use_clusters)
@@ -224,13 +221,15 @@ class SentiLSTM:
             with open(os.path.join(options.output, options.params), 'w') as paramsfp:
                 pickle.dump(to_save_params, paramsfp)
             print 'wrote params'
+            print lookup(self.embed_lookup, 3, update=False).value()[1:3]
+
         else:
-            self.read_params(options.params, options.embed)
+            self.read_params(options.params)
             print 'loaded params'
             self.model.populate(options.model)
             print 'loaded the model'
 
-    def read_params(self, f, extrn_file):
+    def read_params(self, f):
         with open(f, 'r') as paramsfp:
             saved_params = pickle.load(paramsfp)
         lstm_layers = saved_params.pop()
@@ -261,14 +260,6 @@ class SentiLSTM:
 
         if self.word_dict:
             self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict) + 1, self.dim))
-            fp = codecs.open(extrn_file, 'r')  # Reading the embedding vectors from file.
-            fp.readline()
-            embed = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in fp}
-            fp.close()
-            self.embed_lookup.init_row(0, [0] * self.dim)
-            for word in self.word_dict.keys():
-                self.embed_lookup.init_row(self.word_dict[word], embed[word])
-            self.embed_lookup.set_updated(False)
 
         self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
         self.embed_updatable_lookup = self.model.add_lookup_parameters(
@@ -356,9 +347,9 @@ class SentiLSTM:
                     wordsu.append(self.pad_id)
                     pos_tags.append(self.pad_id)
             '''
-            word_embeddings = [self.embed_lookup[i] if self.use_fixed_embed else None for i in words]
+            word_embeddings = [lookup(self.embed_lookup, i, update=False) if self.use_fixed_embed else None for i in words]
             cluster_embeddings = [self.cluster_lookup[i] if self.use_clusters else None for i in clusters]
-            senti_embeddings = [self.senti_embed_lookup[i] if self.use_sentiwn else None for i in senti_word_ids]
+            senti_embeddings = [lookup(self.senti_embed_lookup, i, update=False) if self.use_sentiwn else None for i in senti_word_ids]
             updatable_embeddings = [self.embed_updatable_lookup[wordsu[i]]  if self.use_u_embedds else None for i in xrange(len(wordsu))]
             tag_embeddings = [self.pos_embed_lookup[pos_tags[i]] if self.usepos else None for i in xrange(len(pos_tags))]
             seq_input = [concatenate(filter(None, [word_embeddings[i],updatable_embeddings[i],tag_embeddings[i],senti_embeddings[i],cluster_embeddings[i]])) for i in xrange(len(wordsu))]
