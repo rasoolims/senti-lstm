@@ -227,7 +227,7 @@ class SentiLSTM:
         else:
             self.read_params(options.params)
             print 'loaded params'
-            self.model.load(options.model)
+            self.model.populate(options.model)
 
     def read_params(self, f):
         with open(f, 'r') as paramsfp:
