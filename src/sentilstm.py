@@ -260,7 +260,7 @@ class SentiLSTM:
             (len(self.word_updatable_dict) + 1, self.embed_dim)) if self.use_u_embedds else None
         self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict) + 1, self.dim)) if self.use_fixed_embed else None
         if self.embed_lookup:
-            fp = codecs.open(os.path.abspath(extrn_file), 'r')  # Reading the embedding vectors from file.
+            fp = codecs.open(extrn_file, 'r')  # Reading the embedding vectors from file.
             fp.readline()
             embed = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in fp}
             fp.close()
