@@ -52,7 +52,6 @@ def parse_options():
                       help='adam,sgd,momentum,adadelta,adagrad')
     return parser.parse_args()
 
-import _dynet as dy
 (options, args) = parse_options()
 from dynet import *
 
