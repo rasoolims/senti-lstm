@@ -24,6 +24,7 @@ def parse_options():
                       metavar='FILE')
     parser.add_option('--model', dest='model', help='Load/Save model file', metavar='FILE', default='model.model')
     parser.add_option('--epochs', type='int', dest='epochs', default=5)
+    parser.add_option('--lstm_layers', type='int', dest='lstm_layers', default=1)
     parser.add_option('--batch', type='int', dest='batchsize', default=128)
     parser.add_option('--lstmdims', type='int', dest='lstm_dims', default=200)
     parser.add_option('--hidden', type='int', dest='hidden_units', default=200)
@@ -204,8 +205,9 @@ class SentiLSTM:
 
             inp_dim = self.dim + (self.embed_dim if options.learnEmbed else 0) + (self.pos_dim if self.usepos else 0) \
                       + (2 if self.use_sentiwn else 0) + (self.cluster_dim if self.use_clusters else 0)
-            self.builders = [LSTMBuilder(1, inp_dim, self.lstm_dims, self.model),
-                             LSTMBuilder(1, inp_dim, self.lstm_dims, self.model)] # Creating two lstms (forward and backward).
+            #self.builders = [LSTMBuilder(1, inp_dim, self.lstm_dims, self.model),
+            #                 LSTMBuilder(1, inp_dim, self.lstm_dims, self.model)] # Creating two lstms (forward and backward).
+            self.builders = BiRNNBuilder(options.lstm_layers, inp_dim, self.lstm_dims * 2, self.model, VanillaLSTMBuilder)
             self.hid_dim = options.hidden_units
             self.hid2_dim = options.hidden2_units
             self.hid_inp_dim = options.lstm_dims * 2 + (inp_dim if self.pooling else 0)
@@ -218,6 +220,7 @@ class SentiLSTM:
             to_save_params.append(self.hid_inp_dim)
             to_save_params.append(inp_dim)
             to_save_params.append(self.lstm_dims)
+            to_save_params.append(options.lstm_layers)
             with open(os.path.join(options.output, options.params), 'w') as paramsfp:
                 pickle.dump(to_save_params, paramsfp)
             print 'wrote params'
@@ -230,6 +233,7 @@ class SentiLSTM:
     def read_params(self, f):
         with open(f, 'r') as paramsfp:
             saved_params = pickle.load(paramsfp)
+        lstm_layers = saved_params.pop()
         self.lstm_dims = saved_params.pop()
         inp_dim = saved_params.pop()
         self.hid_inp_dim = saved_params.pop()
@@ -261,8 +265,9 @@ class SentiLSTM:
         self.cluster_lookup = self.model.add_lookup_parameters((len(self.cluster_dict) + 1, self.cluster_dim)) if self.use_clusters else None
         self.senti_embed_lookup = self.model.add_lookup_parameters((len(self.sentiwn_dict) + 1, 2)) if self.use_sentiwn else None
         self.pos_embed_lookup = self.model.add_lookup_parameters((len(self.pos_dict), self.pos_dim)) if self.usepos else None
-        self.builders = [LSTMBuilder(1, inp_dim, self.lstm_dims, self.model),
-                         LSTMBuilder(1, inp_dim, self.lstm_dims, self.model)]
+        self.builders = BiRNNBuilder(lstm_layers, inp_dim, self.lstm_dims * 2, self.model, VanillaLSTMBuilder)
+        #[LSTMBuilder(1, inp_dim, self.lstm_dims, self.model),
+         #                LSTMBuilder(1, inp_dim, self.lstm_dims, self.model)]
         self.H1 = self.model.add_parameters((self.hid_dim, self.hid_inp_dim))
         self.H2 = None if self.hid2_dim == 0 else self.model.add_parameters((self.hid2_dim, self.hid_dim))
         last_hid_dims = self.hid2_dim if self.hid2_dim > 0 else self.hid_dim
@@ -353,11 +358,13 @@ class SentiLSTM:
                 for i in range(1,len(seq_input)):
                     pool_input += seq_input[i]
                 pool_input /= len(seq_input)
-            f_init, b_init = [b.initial_state() for b in self.builders]
-            fw = [x.output() for x in f_init.add_inputs(seq_input)]
-            bw = [x.output() for x in b_init.add_inputs(reversed(seq_input))]
+            # f_init, b_init = [b.initial_state() for b in self.builders]
+            # fw = [x.output() for x in f_init.add_inputs(seq_input)]
+            # bw = [x.output() for x in b_init.add_inputs(reversed(seq_input))]
 
-            input = concatenate(filter(None,[fw[-1],bw[-1],pool_input]))
+            fw_bw = self.builders.transduce(seq_input)
+
+            input = concatenate(filter(None,[fw_bw[-1],pool_input]))
             # I assumed that the activation function is ReLU; it is worth trying tanh as well.
             if H2:
                 r_t = O * self.activation(dropout(H2 * (self.activation(dropout(H1 * input,self.dropout))),self.dropout))
@@ -512,11 +519,12 @@ class SentiLSTM:
             for i in range(1, len(seq_input)):
                 pool_input += seq_input[i]
             pool_input /= len(seq_input)
-        f_init, b_init = [b.initial_state() for b in self.builders]
-        fw = [x.output() for x in f_init.add_inputs(seq_input)]
-        bw = [x.output() for x in b_init.add_inputs(reversed(seq_input))]
+        # f_init, b_init = [b.initial_state() for b in self.builders]
+        # fw = [x.output() for x in f_init.add_inputs(seq_input)]
+        # bw = [x.output() for x in b_init.add_inputs(reversed(seq_input))]
 
-        input = concatenate(filter(None,[fw[-1], bw[-1],pool_input]))
+        fw_bw = self.builders.transduce(seq_input)
+        input = concatenate(filter(None,[fw_bw[-1],pool_input]))
         if H2:
             r_t = O * self.activation(H2 * (self.activation(H1 * input)))
         else:
