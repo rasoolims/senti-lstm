@@ -222,12 +222,12 @@ class SentiLSTM:
                 pickle.dump(to_save_params, paramsfp)
             print 'wrote params'
         else:
-            self.read_params(options.params)
+            self.read_params(options.params, options.embed)
             print 'loaded params'
             self.model.populate(options.model)
             print 'loaded the model'
 
-    def read_params(self, f):
+    def read_params(self, f, extrn_file):
         with open(f, 'r') as paramsfp:
             saved_params = pickle.load(paramsfp)
         lstm_layers = saved_params.pop()
@@ -259,6 +259,17 @@ class SentiLSTM:
         self.embed_updatable_lookup = self.model.add_lookup_parameters(
             (len(self.word_updatable_dict) + 1, self.embed_dim)) if self.use_u_embedds else None
         self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict) + 1, self.dim)) if self.use_fixed_embed else None
+        if self.embed_lookup:
+            fp = codecs.open(os.path.abspath(extrn_file), 'r')  # Reading the embedding vectors from file.
+            fp.readline()
+            embed = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in fp}
+            fp.close()
+            self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict) + 1, self.dim))
+            self.embed_lookup.set_updated(False)  # This means that word embeddings cannot change over time.
+            self.embed_lookup.init_row(0, [0] * self.dim)
+            for word, i in self.word_dict.iteritems():
+                self.embed_lookup.init_row(i, embed[word])
+
         self.cluster_lookup = self.model.add_lookup_parameters((len(self.cluster_dict) + 1, self.cluster_dim)) if self.use_clusters else None
         self.senti_embed_lookup = self.model.add_lookup_parameters((len(self.sentiwn_dict) + 1, 2)) if self.use_sentiwn else None
         self.pos_embed_lookup = self.model.add_lookup_parameters((len(self.pos_dict), self.pos_dim)) if self.usepos else None
