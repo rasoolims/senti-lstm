@@ -264,7 +264,6 @@ class SentiLSTM:
             fp.readline()
             embed = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in fp}
             fp.close()
-            self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict) + 1, self.dim))
             self.embed_lookup.set_updated(False)  # This means that word embeddings cannot change over time.
             self.embed_lookup.init_row(0, [0] * self.dim)
             for word, i in self.word_dict.iteritems():
