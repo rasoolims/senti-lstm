@@ -72,7 +72,6 @@ class SentiLSTM:
         self.word_drop = options.word_drop
         self.pos_dim = options.pos_dim
         self.max_len = 0
-        self.pad_id = 1
         self.save_best = options.save_best
         if options.train_data != None:
             if not os.path.isdir(options.output): os.mkdir(options.output)
@@ -205,8 +204,6 @@ class SentiLSTM:
 
             inp_dim = self.dim + (self.embed_dim if options.learnEmbed else 0) + (self.pos_dim if self.usepos else 0) \
                       + (2 if self.use_sentiwn else 0) + (self.cluster_dim if self.use_clusters else 0)
-            #self.builders = [LSTMBuilder(1, inp_dim, self.lstm_dims, self.model),
-            #                 LSTMBuilder(1, inp_dim, self.lstm_dims, self.model)] # Creating two lstms (forward and backward).
             self.builders = BiRNNBuilder(options.lstm_layers, inp_dim, self.lstm_dims * 2, self.model, VanillaLSTMBuilder)
             self.hid_dim = options.hidden_units
             self.hid2_dim = options.hidden2_units
@@ -266,8 +263,6 @@ class SentiLSTM:
         self.senti_embed_lookup = self.model.add_lookup_parameters((len(self.sentiwn_dict) + 1, 2)) if self.use_sentiwn else None
         self.pos_embed_lookup = self.model.add_lookup_parameters((len(self.pos_dict), self.pos_dim)) if self.usepos else None
         self.builders = BiRNNBuilder(lstm_layers, inp_dim, self.lstm_dims * 2, self.model, VanillaLSTMBuilder)
-        #[LSTMBuilder(1, inp_dim, self.lstm_dims, self.model),
-         #                LSTMBuilder(1, inp_dim, self.lstm_dims, self.model)]
         self.H1 = self.model.add_parameters((self.hid_dim, self.hid_inp_dim))
         self.H2 = None if self.hid2_dim == 0 else self.model.add_parameters((self.hid2_dim, self.hid_dim))
         last_hid_dims = self.hid2_dim if self.hid2_dim > 0 else self.hid_dim
@@ -358,10 +353,6 @@ class SentiLSTM:
                 for i in range(1,len(seq_input)):
                     pool_input += seq_input[i]
                 pool_input /= len(seq_input)
-            # f_init, b_init = [b.initial_state() for b in self.builders]
-            # fw = [x.output() for x in f_init.add_inputs(seq_input)]
-            # bw = [x.output() for x in b_init.add_inputs(reversed(seq_input))]
-
             fw_bw = self.builders.transduce(seq_input)
 
             input = concatenate(filter(None,[fw_bw[-1],pool_input]))
@@ -519,9 +510,6 @@ class SentiLSTM:
             for i in range(1, len(seq_input)):
                 pool_input += seq_input[i]
             pool_input /= len(seq_input)
-        # f_init, b_init = [b.initial_state() for b in self.builders]
-        # fw = [x.output() for x in f_init.add_inputs(seq_input)]
-        # bw = [x.output() for x in b_init.add_inputs(reversed(seq_input))]
 
         fw_bw = self.builders.transduce(seq_input)
         input = concatenate(filter(None,[fw_bw[-1],pool_input]))
