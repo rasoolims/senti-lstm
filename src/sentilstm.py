@@ -203,7 +203,7 @@ class SentiLSTM:
             to_save_params.append(self.dim)
             to_save_params.append(self.embed_dim)
             to_save_params.append(self.use_fixed_embed)
-            print 'Loaded word embeddings. Vector dimensions:', self.dim
+            print 'Loaded word embeddings. Vector dimensions:', len(self.word_dict)+1, self.dim
 
             inp_dim = self.dim + (self.embed_dim if options.learnEmbed else 0) + (self.pos_dim if self.usepos else 0) \
                       + (2 if self.use_sentiwn else 0) + (self.cluster_dim if self.use_clusters else 0)
