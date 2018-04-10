@@ -54,10 +54,6 @@ def parse_options():
 
 import _dynet as dy
 (options, args) = parse_options()
-dyparams = dy.DynetParams()
-dyparams.from_args()
-dyparams.set_mem(options.mem)
-dyparams.init()
 from dynet import *
 
 class SentiLSTM:
