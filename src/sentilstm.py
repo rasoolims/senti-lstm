@@ -117,20 +117,9 @@ class SentiLSTM:
             to_save_params.append(self.rev_labels)
             to_save_params.append(self.label_dict)
             to_save_params.append(self.num_labels)
-            self.embed_dim = options.embed_dim
-            self.embed_updatable_lookup = self.model.add_lookup_parameters(
-                (len(seen_words) + 1, self.embed_dim)) if options.learnEmbed else None  # Updatable word embeddings.
-            self.word_updatable_dict = {word: i + 1 for i, word in enumerate(seen_words)} if  options.learnEmbed else {}# 0th index represent the OOV.
-            if options.embed_init!=None:
-                fp = codecs.open(os.path.abspath(options.embed_init), 'r')
-                embed = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in fp}
-                self.embed_dim = len(embed.values()[0])
-                for word in embed.keys():
-                    if self.word_updatable_dict.has_key(word):
-                        self.embed_updatable_lookup.init_row(self.word_updatable_dict[word], embed[word])
+            self.use_fixed_embed = False
             self.dim = 0
             self.word_dict = None
-            self.use_fixed_embed = False
             if options.embed != None:
                 self.use_fixed_embed = True
                 fp = codecs.open(os.path.abspath(options.embed), 'r') # Reading the embedding vectors from file.
@@ -144,6 +133,20 @@ class SentiLSTM:
                 self.embed_lookup.init_row(0, [0] * self.dim)
                 for word, i in self.word_dict.iteritems():
                     self.embed_lookup.init_row(i, embed[word])
+
+            self.embed_dim = options.embed_dim
+            self.embed_updatable_lookup = self.model.add_lookup_parameters(
+                (len(seen_words) + 1, self.embed_dim)) if options.learnEmbed else None  # Updatable word embeddings.
+            self.word_updatable_dict = {word: i + 1 for i, word in enumerate(seen_words)} if  options.learnEmbed else {}# 0th index represent the OOV.
+            if options.embed_init!=None:
+                fp = codecs.open(os.path.abspath(options.embed_init), 'r')
+                embed = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in fp}
+                self.embed_dim = len(embed.values()[0])
+                for word in embed.keys():
+                    if self.word_updatable_dict.has_key(word):
+                        self.embed_updatable_lookup.init_row(self.word_updatable_dict[word], embed[word])
+
+
             self.use_clusters = False
             self.cluster_dict = None
             self.word2cluster = dict()
@@ -255,10 +258,8 @@ class SentiLSTM:
         self.pos_dim = saved_params.pop()
         self.activation = self.activations[saved_params.pop()]
         self.pooling = saved_params.pop()
-        self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
-        self.embed_updatable_lookup = self.model.add_lookup_parameters(
-            (len(self.word_updatable_dict) + 1, self.embed_dim)) if self.use_u_embedds else None
-        self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict) + 1, self.dim)) if self.use_fixed_embed else None
+        self.embed_lookup = self.model.add_lookup_parameters(
+            (len(self.word_dict) + 1, self.dim)) if self.use_fixed_embed else None
         if self.embed_lookup:
             fp = codecs.open(extrn_file, 'r')  # Reading the embedding vectors from file.
             fp.readline()
@@ -268,6 +269,10 @@ class SentiLSTM:
             self.embed_lookup.init_row(0, [0] * self.dim)
             for word, i in self.word_dict.iteritems():
                 self.embed_lookup.init_row(i, embed[word])
+
+        self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
+        self.embed_updatable_lookup = self.model.add_lookup_parameters(
+            (len(self.word_updatable_dict) + 1, self.embed_dim)) if self.use_u_embedds else None
 
         self.cluster_lookup = self.model.add_lookup_parameters((len(self.cluster_dict) + 1, self.cluster_dim)) if self.use_clusters else None
         self.senti_embed_lookup = self.model.add_lookup_parameters((len(self.sentiwn_dict) + 1, 2)) if self.use_sentiwn else None
