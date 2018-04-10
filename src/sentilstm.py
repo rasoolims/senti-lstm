@@ -129,10 +129,10 @@ class SentiLSTM:
                 self.dim = len(embed.values()[0]) # Word embedding dimension.
                 self.word_dict = {word: i+1 for i, word in enumerate(embed)}
                 self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict) + 1, self.dim))
-                self.embed_lookup.set_updated(False)  # This means that word embeddings cannot change over time.
                 self.embed_lookup.init_row(0, [0] * self.dim)
-                for word, i in self.word_dict.iteritems():
-                    self.embed_lookup.init_row(i, embed[word])
+                for word in self.word_dict.keys():
+                    self.embed_lookup.init_row(self.word_dict[word], embed[word])
+                self.embed_lookup.set_updated(False)
 
             self.embed_dim = options.embed_dim
             self.embed_updatable_lookup = self.model.add_lookup_parameters(
@@ -188,7 +188,6 @@ class SentiLSTM:
             self.pos_dict = {pos:i+1 for i,pos in enumerate(seen_pos_tags)} if self.usepos else None
             if self.usepos:
                 self.pos_embed_lookup = self.model.add_lookup_parameters((len(self.pos_dict)+1, self.pos_dim))
-                self.pos_embed_lookup.set_updated(True)
             if options.learnEmbed: self.embed_updatable_lookup.set_updated(True)
 
             to_save_params.append(self.cluster_dim)
@@ -203,7 +202,8 @@ class SentiLSTM:
             to_save_params.append(self.dim)
             to_save_params.append(self.embed_dim)
             to_save_params.append(self.use_fixed_embed)
-            print 'Loaded word embeddings. Vector dimensions:', len(self.word_dict)+1, self.dim
+            if self.word_dict:
+                print 'Loaded word embeddings. Vector dimensions:', len(self.word_dict)+1, self.dim
 
             inp_dim = self.dim + (self.embed_dim if options.learnEmbed else 0) + (self.pos_dim if self.usepos else 0) \
                       + (2 if self.use_sentiwn else 0) + (self.cluster_dim if self.use_clusters else 0)
@@ -258,17 +258,17 @@ class SentiLSTM:
         self.pos_dim = saved_params.pop()
         self.activation = self.activations[saved_params.pop()]
         self.pooling = saved_params.pop()
-        self.embed_lookup = self.model.add_lookup_parameters(
-            (len(self.word_dict) + 1, self.dim)) if self.use_fixed_embed else None
-        if self.embed_lookup:
+
+        if self.word_dict:
+            self.embed_lookup = self.model.add_lookup_parameters((len(self.word_dict) + 1, self.dim))
             fp = codecs.open(extrn_file, 'r')  # Reading the embedding vectors from file.
             fp.readline()
             embed = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in fp}
             fp.close()
-            self.embed_lookup.set_updated(False)  # This means that word embeddings cannot change over time.
             self.embed_lookup.init_row(0, [0] * self.dim)
-            for word, i in self.word_dict.iteritems():
-                self.embed_lookup.init_row(i, embed[word])
+            for word in self.word_dict.keys():
+                self.embed_lookup.init_row(self.word_dict[word], embed[word])
+            self.embed_lookup.set_updated(False)
 
         self.use_u_embedds = True if len(self.word_updatable_dict)>1 else False
         self.embed_updatable_lookup = self.model.add_lookup_parameters(
@@ -400,10 +400,10 @@ class SentiLSTM:
                 loss += sum_errs.scalar_value()
                 sum_errs.backward()
                 self.trainer.update()
+                renew_cg()
                 sz += len(instances)
                 i+= 1
                 if i%1 == 0: # You can change this to report (and save model if required) less frequently.
-                    self.trainer.status()
                     print 'loss:',loss / sz,'time:',time.time()-start,'max_len',self.max_len
                     start = time.time()
                     sz = 0
