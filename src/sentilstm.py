@@ -142,7 +142,7 @@ class SentiLSTM:
                 embed = {line.split(' ')[0]: [float(f) for f in line.strip().split(' ')[1:]] for line in fp}
                 self.embed_dim = len(embed.values()[0])
                 for word in embed.keys():
-                    if self.word_updatable_dict.has_key(word):
+                    if word in self.word_updatable_dict:
                         self.embed_updatable_lookup.init_row(self.word_updatable_dict[word], embed[word])
 
 
@@ -205,23 +205,15 @@ class SentiLSTM:
             inp_dim = self.dim + (self.embed_dim if options.learnEmbed else 0) + (self.pos_dim if self.usepos else 0) \
                       + (2 if self.use_sentiwn else 0) + (self.cluster_dim if self.use_clusters else 0)
             self.builders = BiRNNBuilder(options.lstm_layers, inp_dim, self.lstm_dims * 2, self.model, VanillaLSTMBuilder)
-            self.hid_dim = options.hidden_units
-            self.hid2_dim = options.hidden2_units
-            self.hid_inp_dim = options.lstm_dims * 2 + (inp_dim if self.pooling else 0)
-            self.H1 = self.model.add_parameters((self.hid_dim, self.hid_inp_dim))
-            self.H2 = None if self.hid2_dim == 0 else self.model.add_parameters((self.hid2_dim, self.hid_dim))
-            last_hid_dims = self.hid2_dim if self.hid2_dim > 0 else self.hid_dim
-            self.O = self.model.add_parameters((self.num_labels, last_hid_dims)) # Output layer.
-            to_save_params.append(self.hid_dim)
-            to_save_params.append(self.hid2_dim)
-            to_save_params.append(self.hid_inp_dim)
+            self.attention = self.model.add_parameters((1, self.lstm_dims * 2))
+            self.O = self.model.add_parameters((self.num_labels, self.lstm_dims * 2)) # Output layer.
+            self.B = self.model.add_parameters((self.num_labels, ), init=ConstInitializer(0)) # Output layer.
             to_save_params.append(inp_dim)
             to_save_params.append(self.lstm_dims)
             to_save_params.append(options.lstm_layers)
             with open(os.path.join(options.output, options.params), 'w') as paramsfp:
                 pickle.dump(to_save_params, paramsfp)
             print 'wrote params'
-            print lookup(self.embed_lookup, 3, update=False).value()[1:3]
 
         else:
             self.read_params(options.params)
@@ -235,9 +227,6 @@ class SentiLSTM:
         lstm_layers = saved_params.pop()
         self.lstm_dims = saved_params.pop()
         inp_dim = saved_params.pop()
-        self.hid_inp_dim = saved_params.pop()
-        self.hid2_dim = saved_params.pop()
-        self.hid_dim = saved_params.pop()
         self.use_fixed_embed = saved_params.pop()
         self.embed_dim = saved_params.pop()
         self.dim = saved_params.pop()
@@ -269,16 +258,12 @@ class SentiLSTM:
         self.senti_embed_lookup = self.model.add_lookup_parameters((len(self.sentiwn_dict) + 1, 2)) if self.use_sentiwn else None
         self.pos_embed_lookup = self.model.add_lookup_parameters((len(self.pos_dict), self.pos_dim)) if self.usepos else None
         self.builders = BiRNNBuilder(lstm_layers, inp_dim, self.lstm_dims * 2, self.model, VanillaLSTMBuilder)
-        self.H1 = self.model.add_parameters((self.hid_dim, self.hid_inp_dim))
-        self.H2 = None if self.hid2_dim == 0 else self.model.add_parameters((self.hid2_dim, self.hid_dim))
-        last_hid_dims = self.hid2_dim if self.hid2_dim > 0 else self.hid_dim
-        self.O = self.model.add_parameters((self.num_labels, last_hid_dims))
+        self.attention = self.model.add_parameters((1, self.lstm_dims * 2))
+        self.O = self.model.add_parameters((self.num_labels, self.lstm_dims * 2))
+        self.B = self.model.add_parameters((self.num_labels,), init=ConstInitializer(0))  # Output layer.
 
     def build_graph(self, train_lines):
         errors = []
-        H1 = self.H1.expr()
-        H2 = self.H2.expr() if self.H2 != None else None
-        O = self.O.expr()
 
         for train_line in train_lines:
             words,label = train_line.strip().split('\t')
@@ -306,7 +291,7 @@ class SentiLSTM:
                     pos_tags.append(0)
                     wordu = w
 
-                if self.word_updatable_dict.has_key(wordu) and random.uniform(0,1)>=self.word_drop: # If in-vocabulary and no need to drop it out.
+                if wordu in self.word_updatable_dict and random.uniform(0,1)>=self.word_drop: # If in-vocabulary and no need to drop it out.
                     wordsu.append(self.word_updatable_dict[wordu])
                 else:
                     wordsu.append(0)
@@ -352,21 +337,11 @@ class SentiLSTM:
             senti_embeddings = [lookup(self.senti_embed_lookup, i, update=False) if self.use_sentiwn else None for i in senti_word_ids]
             updatable_embeddings = [self.embed_updatable_lookup[wordsu[i]]  if self.use_u_embedds else None for i in xrange(len(wordsu))]
             tag_embeddings = [self.pos_embed_lookup[pos_tags[i]] if self.usepos else None for i in xrange(len(pos_tags))]
-            seq_input = [concatenate(filter(None, [word_embeddings[i],updatable_embeddings[i],tag_embeddings[i],senti_embeddings[i],cluster_embeddings[i]])) for i in xrange(len(wordsu))]
-            if not self.pooling: pool_input = None
-            else:
-                pool_input = seq_input[0]
-                for i in range(1,len(seq_input)):
-                    pool_input += seq_input[i]
-                pool_input /= len(seq_input)
-            fw_bw = self.builders.transduce(seq_input)
-
-            input = concatenate(filter(None,[fw_bw[-1],pool_input]))
-            # I assumed that the activation function is ReLU; it is worth trying tanh as well.
-            if H2:
-                r_t = O * self.activation(dropout(H2 * (self.activation(dropout(H1 * input,self.dropout))),self.dropout))
-            else:
-                r_t = O * (self.activation(dropout(H1 * input,self.dropout)))
+            seq_input = [concatenate(list(filter(None, [word_embeddings[i],updatable_embeddings[i],tag_embeddings[i],senti_embeddings[i],cluster_embeddings[i]]))) for i in xrange(len(wordsu))]
+            fw_bw = concatenate_cols(self.builders.transduce(seq_input))
+            z_values = softmax(transpose(self.attention.expr()* fw_bw))
+            input = fw_bw * z_values
+            r_t = self.O.expr() * input + self.B.expr()
             err = pickneglogsoftmax(r_t, label) # Getting the softmax loss function value to backprop later.
             errors.append(err)
         return errors
@@ -407,7 +382,7 @@ class SentiLSTM:
                         for line in fp:
                             all_dev_num += 1
                             sentence,label = line.strip().split('\t')
-                            predicted = self.predict(sentence.strip())
+                            predicted, attentions = self.predict(sentence.strip())
                             if predicted == label:
                                 correct += 1
                         acc = float(correct)/all_dev_num
@@ -462,9 +437,6 @@ class SentiLSTM:
 
     def predict(self, sentence):
         renew_cg()
-        H1 = self.H1.expr()
-        H2 = self.H2.expr() if self.H2 != None else None
-        O = self.O.expr()
 
         tokens = sentence.split()
         words = []
@@ -508,23 +480,14 @@ class SentiLSTM:
         updatable_embeddings = [self.embed_updatable_lookup[wordsu[i]] if self.use_u_embedds else None for i in
                                 xrange(len(wordsu))]
         tag_embeddings = [self.pos_embed_lookup[pos_tags[i]] if self.usepos else None for i in xrange(len(pos_tags))]
-        seq_input = [concatenate(filter(None, [word_embeddings[i], updatable_embeddings[i], tag_embeddings[i],
-                                               senti_embeddings[i], cluster_embeddings[i]])) for i in xrange(len(wordsu))]
-        if not self.pooling:  pool_input = None
-        else:
-            pool_input = seq_input[0]
-            for i in range(1, len(seq_input)):
-                pool_input += seq_input[i]
-            pool_input /= len(seq_input)
-
-        fw_bw = self.builders.transduce(seq_input)
-        input = concatenate(filter(None,[fw_bw[-1],pool_input]))
-        if H2:
-            r_t = O * self.activation(H2 * (self.activation(H1 * input)))
-        else:
-            r_t = O * (self.activation(H1 * input))
+        seq_input = [concatenate(list(filter(None, [word_embeddings[i], updatable_embeddings[i], tag_embeddings[i],
+                                               senti_embeddings[i], cluster_embeddings[i]]))) for i in xrange(len(wordsu))]
+        fw_bw = concatenate_cols(self.builders.transduce(seq_input))
+        z_values = softmax(transpose(self.attention.expr() * fw_bw))
+        input = fw_bw * z_values
+        r_t = self.O.expr() * input + self.B.expr()
         label = np.argmax(r_t.npvalue())
-        return self.rev_labels[label]
+        return self.rev_labels[label], z_values.value()
 
 if __name__ == '__main__':
     (options, args) = parse_options()
@@ -544,15 +507,21 @@ if __name__ == '__main__':
     if options.input_data != None and options.output_data!=None and options.model != None and options.params !=None:
         fp = codecs.open(os.path.abspath(options.input_data), 'r')
         fw = codecs.open(os.path.abspath(options.output_data), 'w')
+        fw_log = codecs.open(os.path.abspath(options.output_data)+'.log', 'w')
         i = 0
         start = time.time()
         for line in fp:
            sen = line.strip().split('\t')[0]
-           fw.write(sen+'\t'+senti_lstm.predict(sen)+'\n')
+           words = sen.strip().split()
+           predicted, attention = senti_lstm.predict(sen)
+           fw.write(sen+'\t'+predicted+'\n')
+           log_output = ' '.join([w+ str(a) for w, a in zip(words, attention)]) + '\t' + predicted + '\n'
+           fw_log.write(log_output)
            i += 1
            if i%100==0: sys.stdout.write(str(i)+'...')
         fw.close()
         fp.close()
+        fw_log.close()
         sys.stdout.write('done in '+str(time.time()-start)+'\n')
     if options.input_folder != None and options.output_folder != None and options.model != None and options.params !=None:
         inp_dir = os.path.abspath(options.input_folder)+'/'
@@ -562,13 +531,18 @@ if __name__ == '__main__':
             print 'processing',f
             fp = codecs.open(inp_dir+f, 'r')
             fw = codecs.open(outp_dir+f, 'w')
+            fw_log = codecs.open(outp_dir+f+'.log', 'w')
             i = 0
             start = time.time()
             for line in fp:
                sen = line.strip().split('\t')[0]
-               fw.write(sen+'\t'+senti_lstm.predict(sen)+'\n')
+               predicted, attention = senti_lstm.predict(sen)
+               fw.write(sen + '\t' + predicted + '\n')
+               log_output = ' '.join([w + str(a) for w, a in zip(words, attention)]) + '\t' + predicted + '\n'
+               fw_log.write(log_output)
                i += 1
                if i%100==0: sys.stdout.write(str(i)+'...')
             fw.close()
             fp.close()
+            fw_log.close()
             sys.stdout.write('done in '+str(time.time()-start)+'\n')
