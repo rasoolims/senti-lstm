@@ -504,7 +504,8 @@ if __name__ == '__main__':
                 senti_lstm.model.save(os.path.join(options.output, options.model+'_iter_'+str(i)))
             else:
                 print('end of iteration', i)
-        senti_lstm.model.save(os.path.join(options.output, options.model + '.final'))
+        if not options.save_best or best_acc == float('-inf'):
+            senti_lstm.model.save(os.path.join(options.output, options.model + '.final'))
     if options.input_data != None and options.output_data!=None and options.model != None and options.params !=None:
         fp = codecs.open(os.path.abspath(options.input_data), 'r')
         fw = codecs.open(os.path.abspath(options.output_data), 'w')
