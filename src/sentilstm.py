@@ -221,7 +221,6 @@ class SentiLSTM:
             with open(os.path.join(options.output, options.params), 'w') as paramsfp:
                 pickle.dump(to_save_params, paramsfp)
             print 'wrote params'
-            print lookup(self.embed_lookup, 3, update=False).value()[1:3]
 
         else:
             self.read_params(options.params)
