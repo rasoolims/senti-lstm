@@ -220,13 +220,13 @@ class SentiLSTM:
             to_save_params.append(options.lstm_layers)
             with open(os.path.join(options.output, options.params), 'w') as paramsfp:
                 pickle.dump(to_save_params, paramsfp)
-            print 'wrote params'
+            print('wrote params')
 
         else:
             self.read_params(options.params)
-            print 'loaded params'
+            print('loaded params')
             self.model.populate(options.model)
-            print 'loaded the model'
+            print('loaded the model')
 
     def read_params(self, f):
         with open(f, 'r') as paramsfp:
@@ -394,7 +394,7 @@ class SentiLSTM:
                 sz += len(instances)
                 i+= 1
                 if i%1 == 0: # You can change this to report (and save model if required) less frequently.
-                    print 'loss:',loss / sz,'time:',time.time()-start,'max_len',self.max_len
+                    print('loss:',loss / sz,'time:',time.time()-start,'max_len',self.max_len)
                     start = time.time()
                     sz = 0
                     loss = 0
@@ -410,53 +410,18 @@ class SentiLSTM:
                             if predicted == label:
                                 correct += 1
                         acc = float(correct)/all_dev_num
-                        print 'acc', acc
+                        print('acc', acc)
                         if acc>best_acc:
                             best_acc = acc
                             if self.save_best:
-                                print 'saving best accurary', best_acc
+                                print('saving best accurary', best_acc)
                                 self.model.save(os.path.join(options.output, options.model))
                             else:
-                                print 'best accurary', best_acc
+                                print( 'best accurary', best_acc)
                 errs = []
                 instances = []
                 self.max_len = 0
                 renew_cg()
-        '''
-        skipping the rest because it does have the same batch size
-        if len(instances)>=0:
-            errs = self.build_graph(instances)
-            sum_errs = esum(errs)
-            squared = -sum_errs  # * sum_errs
-            loss = sum_errs.scalar_value()
-            sum_errs.backward()
-            self.trainer.update()
-            self.trainer.status()
-            print 'loss:', loss / len(instances), 'time:', time.time() - start
-            start = time.time()
-            instances = []
-            errs = []
-            renew_cg()
-            if options.dev_data != None:
-                correct = 0
-                all_dev_num = 0
-                fp = codecs.open(options.dev_data, 'r')
-                for line in fp:
-                    all_dev_num += 1
-                    sentence, label = line.strip().split('\t')
-                    predicted = self.predict(sentence.strip())
-                    if predicted == label:
-                        correct += 1
-                acc = float(correct) / all_dev_num
-                print 'acc', acc
-                if acc > best_acc:
-                    best_acc = acc
-                    if self.save_best:
-                        print 'saving best accurary',best_acc
-                        self.model.save(os.path.join(options.output, options.model))
-                    else:
-                        print 'best accurary', best_acc
-        '''
         return best_acc
 
     def predict(self, sentence):
@@ -527,7 +492,7 @@ class SentiLSTM:
 
 if __name__ == '__main__':
     (options, args) = parse_options()
-    print options
+    print(options)
     senti_lstm = SentiLSTM(options)
 
     if options.train_data!=None:
@@ -535,10 +500,10 @@ if __name__ == '__main__':
         for i in xrange(options.epochs):
             best_acc = senti_lstm.train(options, best_acc)
             if options.save_iters:
-                print 'saving for iteration',i
+                print('saving for iteration',i)
                 senti_lstm.model.save(os.path.join(options.output, options.model+'_iter_'+str(i)))
             else:
-                print 'end of iteration', i
+                print('end of iteration', i)
         senti_lstm.model.save(os.path.join(options.output, options.model + '.final'))
     if options.input_data != None and options.output_data!=None and options.model != None and options.params !=None:
         fp = codecs.open(os.path.abspath(options.input_data), 'r')
@@ -558,7 +523,7 @@ if __name__ == '__main__':
         outp_dir = os.path.abspath(options.output_folder)+'/'
 
         for f in os.listdir(inp_dir):
-            print 'processing',f
+            print('processing',f)
             fp = codecs.open(inp_dir+f, 'r')
             fw = codecs.open(outp_dir+f, 'w')
             i = 0
